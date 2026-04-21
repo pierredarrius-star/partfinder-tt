@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local test/diagnostic scripts
+*.py
+test_*.js
+agent/
+all_voices.txt
+voices_list.txt
+matches.txt

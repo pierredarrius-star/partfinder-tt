@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { normalizePartQuery, generateSupplierMessage } from './ai';
 import { sendWhatsAppMessage } from './whatsapp';
-import { initiateVapiCall } from './vapi';
 
 /**
  * 1. Takes the raw query, cleans it with AI
@@ -50,33 +49,8 @@ export async function executeParallelSearch(inquiryId: string, rawQuery: string)
 
     // We await all of them finishing
     await Promise.all(broadcastPromises);
-    
+
     console.log(`[SYS] Parallel blast complete.`);
-
-    // 5. VOICE FALLBACK (Delayed)
-    // In a real production system, this would be a separate background worker or Cron job.
-    // For this MVP demo, we will wait 20 seconds (reduced for faster demo) and then call anyone who hasn't replied.
-    console.log(`[SYS] Waiting 20 seconds for WhatsApp replies before voice fallback...`);
-    
-    setTimeout(async () => {
-      const { data: nonResponders } = await supabase
-        .from('supplier_responses')
-        .select('*, suppliers(whatsapp_number, phone_number)')
-        .eq('inquiry_id', inquiryId)
-        .eq('status', 'contacted');
-
-      if (nonResponders && nonResponders.length > 0) {
-        console.log(`[VOICE] ${nonResponders.length} suppliers didn't reply to WhatsApp. Starting Vapi voice calls...`);
-        
-        nonResponders.forEach(async (resp: any) => {
-          // Fallback to the supplier's direct phone number
-          const phone = resp.suppliers?.phone_number || resp.suppliers?.whatsapp_number;
-          if (phone) {
-            await initiateVapiCall(phone, cleanItemName, inquiryId, resp.supplier_id);
-          }
-        });
-      }
-    }, 20000); // 20 second delay for the "magic" to show in a demo
 
   } catch (err) {
     console.error("Parallel Search Logic failed:", err);
