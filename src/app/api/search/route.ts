@@ -14,11 +14,12 @@ export async function POST(request: Request) {
       );
     }
 
-    // --- Demo Mode Check (Moved Up) ---
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('your_')) {
-      console.warn("[SEARCH DEMO] Skipping DB and returning fake inquiry ID.");
-      return NextResponse.json({ 
-        success: true, 
+    // --- Demo Mode Check ---
+    // Only fall back to demo if Supabase is not configured
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('your_')) {
+      console.warn("[SEARCH DEMO] Supabase not configured, returning fake inquiry ID.");
+      return NextResponse.json({
+        success: true,
         inquiryId: "demo-inquiry-123",
         message: 'Search started successfully (demo mode)'
       });

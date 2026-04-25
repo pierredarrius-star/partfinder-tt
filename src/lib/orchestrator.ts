@@ -37,8 +37,30 @@ export async function executeParallelSearch(inquiryId: string, rawQuery: string)
 
     // 4. BLAST IN PARALLEL! Send WhatsApp to all stores at the exact same time
     const broadcastPromises = suppliers.map(async (supplier: any) => {
+      // Idempotency gate: if we already have a row for this inquiry+supplier
+      // (e.g. from a duplicate route invocation), skip the send entirely.
+      const { data: existing } = await supabase
+        .from('supplier_responses')
+        .select('id')
+        .eq('inquiry_id', inquiryId)
+        .eq('supplier_id', supplier.id)
+        .maybeSingle();
+
+      if (existing) {
+        console.log(`[SYS] Duplicate blast skipped for supplier ${supplier.id} on inquiry ${inquiryId}`);
+        return;
+      }
+
+      // Abandon any stale 'contacted' rows for this supplier from previous searches
+      // so the webhook's "most recent contacted row" lookup always finds the current inquiry.
+      await supabase
+        .from('supplier_responses')
+        .update({ status: 'abandoned' })
+        .eq('supplier_id', supplier.id)
+        .eq('status', 'contacted');
+
       const success = await sendWhatsAppMessage(supplier.whatsapp_number, exactMessage);
-      
+
       // Log the attempt into the DB so the user can see the system working
       return supabase.from('supplier_responses').insert([{
         inquiry_id: inquiryId,

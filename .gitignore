@@ -47,3 +47,10 @@ agent/
 all_voices.txt
 voices_list.txt
 matches.txt
+
+# local claude session memory
+.claude/
+
+# waha / whatsapp session artifacts
+qr.png
+session.json

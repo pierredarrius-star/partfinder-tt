@@ -1,113 +1,68 @@
-import { GoogleGenAI } from '@google/genai';
+import axios from 'axios';
 
-// Initialize the Gemini client using the new SDK
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma4:e4b';
 
-/**
- * Normalizes a user part query into a structured, clean OEM part description
- */
+async function ollamaGenerate(prompt: string): Promise<string> {
+  const response = await axios.post(`${OLLAMA_URL}/api/generate`, {
+    model: OLLAMA_MODEL,
+    prompt,
+    stream: false,
+  });
+  return response.data.response?.trim() || '';
+}
+
 export async function normalizePartQuery(rawQuery: string): Promise<string> {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('your_')) {
-    console.warn("Using DEMO MODE for normalization.");
-    return `Cleaned ${rawQuery} (Demo Mode)`;
-  }
+  const prompt = `You are an expert auto-parts locator for Trinidad & Tobago.
+The user is looking for a car part. Raw input: "${rawQuery}"
 
-  const prompt = `
-    You are an expert auto-parts locator acting directly for a user in Trinidad & Tobago.
-    The user is looking for a car part.
-    Raw input: "${rawQuery}"
-    
-    Your job is to clean this input into a highly specific, professional, and standard 
-    part description that a local auto parts store clerk will instantly understand.
-    
-    CRITICAL: If a VIN (Vehicle Identification Number) is provided in the input, use it to lookup 
-    exact sub-model, engine code, and part compatibility.
-    
-    Do not output any conversational text. ONLY output the corrected part name and 
-    vehicle details in a single clean string. 
-    Example: "Lower Control Arm - Front Left - 2012 Nissan Tiida HR15DE (VIN: MDA61C...)"
-  `;
+Clean this into a specific, professional part description a local auto parts store clerk will instantly understand.
+If a VIN is in the input, use it to include exact sub-model, engine code, and part compatibility.
+Output ONLY the corrected part name and vehicle details as a single clean string. No extra text.
+Example: "Lower Control Arm - Front Left - 2012 Nissan Tiida HR15DE"`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-    });
-    
-    return response.text?.trim() || rawQuery;
+    return (await ollamaGenerate(prompt)) || rawQuery;
   } catch (error) {
-    console.error("Gemini Error normalizing part:", error);
+    console.error('[Ollama] Error normalizing part:', error);
     return rawQuery;
   }
 }
 
-/**
- * Generates the WhatsApp text message to send to suppliers
- */
 export async function generateSupplierMessage(cleanPartName: string): Promise<string> {
-   if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('your_')) {
-    return `Good day, checking to see if you have this in stock: ${cleanPartName}. What is the price and brand? (Demo Mode)`;
-  }
+  const prompt = `You are an AI assistant named Partfinder working for a mechanic in Trinidad & Tobago.
+You need to ask an auto parts store via WhatsApp if they have a specific part in stock.
+Part needed: "${cleanPartName}"
 
-  const prompt = `
-    You are an AI assistant named 'Partfinder' working for a mechanic in Trinidad & Tobago.
-    You need to ask an auto parts store (via WhatsApp) if they have a specific part in stock.
-    
-    Part needed: "${cleanPartName}"
-    
-    Draft a completely natural, polite, and very brief WhatsApp message asking if they have it, 
-    the price, and if it is Original (OEM) or Aftermarket. 
-    Use a polite local tone (e.g. "Good day!"). Keep it under 2 sentences.
-  `;
+Write a natural, polite, brief WhatsApp message asking if they have it, the price, and if it is OEM or aftermarket.
+Use a polite local tone (e.g. "Good day!"). Keep it under 2 sentences. Output ONLY the message text.`;
 
+  const fallback = `Good day! Checking to see if you have this in stock: ${cleanPartName}. What is the price and brand?`;
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-    });
-    
-    return response.text?.trim() || `Good day, checking to see if you have this in stock: ${cleanPartName}. What is the price and brand?`;
+    return (await ollamaGenerate(prompt)) || fallback;
   } catch (error) {
-    console.error("Gemini Error generating message:", error);
-    return `Good day, checking to see if you have this in stock: ${cleanPartName}. What is the price and brand?`;
+    console.error('[Ollama] Error generating supplier message:', error);
+    return fallback;
   }
 }
 
-/**
- * Categorizes a supplier text response using AI
- */
 export async function analyzeSupplierResponse(text: string): Promise<{
-  availability: 'yes' | 'no' | 'checking' | 'unknown',
-  price?: number,
-  notes?: string
+  availability: 'yes' | 'no' | 'checking' | 'unknown';
+  price?: number;
+  notes?: string;
 }> {
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY.includes('your_')) {
-     return { availability: 'yes', price: 450, notes: 'Demo Mode: Auto-matched!' };
-  }
+  const prompt = `Analyze this message from an auto parts store in Trinidad & Tobago: "${text}"
 
-  const prompt = `
-    Analyze this message from an auto parts store in T&T: "${text}"
-    
-    Determine if they:
-    - Have the part (YES)
-    - Do NOT have it (NO)
-    - Are currently checking or will get back later (CHECKING)
-    
-    Return a JSON object: 
-    { "availability": "yes" | "no" | "checking" | "unknown", "price": number | null, "notes": "brief summary" }
-  `;
+Determine if they have the part (yes), do NOT have it (no), are checking (checking), or it is unclear (unknown).
+Return ONLY a JSON object with no extra text:
+{"availability":"yes"|"no"|"checking"|"unknown","price":number|null,"notes":"brief summary"}`;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
-      contents: prompt,
-    });
-    
-    const raw = response.text?.trim() || "";
+    const raw = await ollamaGenerate(prompt);
     const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleaned);
   } catch (error) {
-    console.error("Gemini Error analyzing response:", error);
+    console.error('[Ollama] Error analyzing supplier response:', error);
     return { availability: 'unknown' };
   }
 }

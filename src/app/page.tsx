@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
@@ -10,10 +10,13 @@ export default function Home() {
   const [vehicleDetails, setVehicleDetails] = useState("");
   const [vin, setVin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  // useRef guard is synchronous — immune to React's batched render timing,
+  // which can let a second tap through before isLoading reflects in the DOM.
+  const isSubmitting = useRef(false);
 
   const handleSearch = async () => {
-    if (!partName) return;
-
+    if (!partName || isSubmitting.current) return;
+    isSubmitting.current = true;
     setIsLoading(true);
     try {
       const response = await fetch('/api/search', {
@@ -25,14 +28,16 @@ export default function Home() {
       const data = await response.json();
 
       if (data.success) {
-        router.push('/results');
+        router.push(`/results?id=${data.inquiryId}`);
       } else {
         alert("Failed to start search: " + data.error);
         setIsLoading(false);
+        isSubmitting.current = false;
       }
     } catch (e) {
       console.error(e);
       setIsLoading(false);
+      isSubmitting.current = false;
     }
   };
 

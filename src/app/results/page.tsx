@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
+import SupplierBlastLoader from "@/components/SupplierBlastLoader";
 
 function ResultsContent() {
   const searchParams = useSearchParams();
@@ -12,6 +13,7 @@ function ResultsContent() {
   const [status, setStatus] = useState<"searching" | "contacting" | "found">("searching");
   const [inquiryData, setInquiryData] = useState<any>(null);
   const [responses, setResponses] = useState<any[]>([]);
+  const [totalContacted, setTotalContacted] = useState(0);
 
   useEffect(() => {
     if (!inquiryId) return;
@@ -31,14 +33,28 @@ function ResultsContent() {
       }
     };
 
-    // 2. Fetch existing responses
+    // 2. Fetch existing responses and total contacted count
     const fetchResponses = async () => {
-      const { data } = await supabase
-        .from('supplier_responses')
-        .select('*, suppliers(name, store_location)')
-        .eq('inquiry_id', inquiryId)
-        .eq('status', 'replied');
-      
+      const [{ data, error }, { count }] = await Promise.all([
+        supabase
+          .from('supplier_responses')
+          .select('*, suppliers(name, store_location)')
+          .eq('inquiry_id', inquiryId)
+          .eq('status', 'replied'),
+        supabase
+          .from('supplier_responses')
+          .select('*', { count: 'exact', head: true })
+          .eq('inquiry_id', inquiryId),
+      ]);
+
+      if (error) {
+        console.error('[POLL] supplier_responses query failed:', error);
+        return;
+      }
+
+      console.log(`[POLL] replied rows: ${data?.length ?? 0} | total contacted: ${count}`);
+
+      if (count != null) setTotalContacted(count);
       if (data) {
         setResponses(data);
         if (data.length > 0) setStatus('found');
@@ -48,9 +64,11 @@ function ResultsContent() {
     fetchInquiry();
     fetchResponses();
 
-    // 3. Subscribe to real-time changes
+    // 3. Subscribe to real-time changes.
+    // Requires REPLICA IDENTITY FULL on supplier_responses so Supabase includes
+    // all columns in the WAL for UPDATE events — needed for the inquiry_id filter.
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel(`inquiry-${inquiryId}`)
       .on(
         'postgres_changes',
         {
@@ -60,24 +78,34 @@ function ResultsContent() {
           filter: `inquiry_id=eq.${inquiryId}`
         },
         async (payload) => {
-          console.log('Change received!', payload);
-          // Re-fetch everything to ensure join data is correct
-          const { data: newResp } = await supabase
-            .from('supplier_responses')
-            .select('*, suppliers(name, store_location)')
-            .eq('inquiry_id', inquiryId)
-            .eq('status', 'replied');
-          
+          console.log('Realtime change received!', payload);
+          const [{ data: newResp }, { count }] = await Promise.all([
+            supabase
+              .from('supplier_responses')
+              .select('*, suppliers(name, store_location)')
+              .eq('inquiry_id', inquiryId)
+              .eq('status', 'replied'),
+            supabase
+              .from('supplier_responses')
+              .select('*', { count: 'exact', head: true })
+              .eq('inquiry_id', inquiryId),
+          ]);
+
+          if (count != null) setTotalContacted(count);
           if (newResp) {
             setResponses(newResp);
-            setStatus('found');
+            if (newResp.length > 0) setStatus('found');
           }
         }
       )
       .subscribe();
 
+    // 4. Polling fallback — catches replies if the realtime event is missed
+    const pollId = setInterval(fetchResponses, 3000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollId);
     };
   }, [inquiryId]);
 
@@ -105,44 +133,39 @@ function ResultsContent() {
 
       <main className="flex-1 px-4 py-6 overflow-y-auto">
         
-        {/* Status Tracker */}
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-1 bg-slate-100">
-            <div className={`h-full bg-brand-500 transition-all duration-1000 ease-out ${status === "searching" ? "w-1/3" : status === "contacting" ? "w-2/3" : "w-full"}`}></div>
+        {/* Loading screen — shown while contacting suppliers */}
+        {status !== "found" && (
+          <div className="mb-6">
+            <SupplierBlastLoader />
           </div>
-          
-          <div className="flex flex-col items-center justify-center py-4 text-center">
-            {status === "searching" && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-blue-50 text-brand-500 flex items-center justify-center mb-3 animate-pulse">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">Analyzing Parts...</h2>
-                <p className="text-sm text-slate-500 mt-1 max-w-[200px]">AI is cleaning your query and identifying stores in T&T.</p>
-              </>
-            )}
+        )}
 
-            {status === "contacting" && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center mb-3 animate-bounce">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">Partfinder is Calling...</h2>
-                <p className="text-sm text-slate-500 mt-1 max-w-[200px]">Parallel agents are messaging and calling suppliers right now.</p>
-              </>
+        {/* Found state — compact summary card */}
+        {status === "found" && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 mb-6">
+            {/* Live reply counter */}
+            {totalContacted > 0 && (
+              <div className="flex items-center justify-center gap-2 mb-4">
+                <span className="flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 font-bold text-sm px-3 py-1.5 rounded-full">
+                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                  {responses.length}
+                </span>
+                <span className="text-slate-400 text-xs font-medium">of</span>
+                <span className="bg-slate-100 text-slate-600 font-bold text-sm px-3 py-1.5 rounded-full">
+                  {totalContacted}
+                </span>
+                <span className="text-slate-500 text-xs font-medium">suppliers replied</span>
+              </div>
             )}
-
-            {status === "found" && (
-              <>
-                <div className="w-16 h-16 rounded-full bg-green-50 text-green-500 flex items-center justify-center mb-3">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                </div>
-                <h2 className="text-lg font-bold text-slate-800">{responses.length} Store{responses.length !== 1 ? 's' : ''} Replied</h2>
-                <p className="text-sm text-slate-500 mt-1 max-w-[200px]">Check the available prices and locations below.</p>
-              </>
-            )}
+            <div className="flex flex-col items-center justify-center py-4 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-50 text-green-500 flex items-center justify-center mb-3">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+              <h2 className="text-lg font-bold text-slate-800">{responses.length} Store{responses.length !== 1 ? "s" : ""} Replied</h2>
+              <p className="text-sm text-slate-500 mt-1 max-w-[200px]">Check the available prices and locations below.</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Results List */}
         <div className={`transition-all duration-500 ${responses.length > 0 ? "opacity-100 translate-y-0" : "opacity-50 translate-y-4 pointer-events-none filter blur-[1px]"}`}>
@@ -164,16 +187,16 @@ function ResultsContent() {
                   <div className="flex justify-between items-start mb-1">
                     <h4 className="text-lg font-bold text-slate-800">{resp.suppliers?.name}</h4>
                     <span className="text-xl font-bold text-brand-600">
-                      {resp.price_quoted ? `$${resp.price_quoted}` : 'Price on Pickup'}
+                      {resp.price ? `$${resp.price}` : 'Price on Pickup'}
                     </span>
                   </div>
-                  
+
                   <div className="flex items-center gap-2 mb-3">
                     <span className="bg-slate-100 text-slate-700 text-[10px] uppercase font-bold px-2 py-0.5 rounded-md border border-slate-200">
-                      {resp.raw_response?.toLowerCase().includes('genuine') ? 'Genuine OEM' : 'Confirmed Stock'}
+                      {resp.response_text?.toLowerCase().includes('genuine') ? 'Genuine OEM' : 'Confirmed Stock'}
                     </span>
                     <span className="text-xs text-slate-500 italic">
-                      "{resp.raw_response?.length > 40 ? resp.raw_response.substring(0, 40) + '...' : resp.raw_response}"
+                      "{resp.response_text?.length > 40 ? resp.response_text.substring(0, 40) + '...' : resp.response_text}"
                     </span>
                   </div>
 

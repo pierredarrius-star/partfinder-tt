@@ -1,48 +1,36 @@
 import axios from 'axios';
 
-/**
- * Sends a WhatsApp message using Meta Cloud API
- * This requires a verified Facebook Business Manager and WhatsApp App setup
- */
+const WAHA_URL = process.env.WAHA_URL || 'http://localhost:3001';
+
 export async function sendWhatsAppMessage(
   toPhoneNumber: string,
   message: string
 ): Promise<boolean> {
-  // Check for placeholder token first for demo purposes
-  if (!process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN.includes('your_')) {
-    console.warn(`[WHATSAPP DEMO] Simulating message to ${toPhoneNumber}: ${message}`);
-    return true;
-  }
-
-  const token = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-  if (!token || !phoneId) {
-    console.warn("WhatsApp API keys missing. SIMULATING message send to:", toPhoneNumber);
-    console.log("MESSAGE CONTENT:", message);
-    return true; // Simulate success for local testing MVP
-  }
+  // Convert +18683248608 -> 18683248608@c.us
+  const chatId = toPhoneNumber.replace('+', '') + '@c.us';
 
   try {
     const response = await axios.post(
-      `https://graph.facebook.com/v19.0/${phoneId}/messages`,
+      `${WAHA_URL}/api/sendText`,
       {
-        messaging_product: "whatsapp",
-        to: toPhoneNumber.replace('+', ''), // Meta API usually expects number without +
-        type: "text",
-        text: { body: message }
+        chatId,
+        text: message,
+        session: process.env.WAHA_SESSION || 'default',
       },
       {
         headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+          ...(process.env.WAHA_API_KEY ? { 'X-Api-Key': process.env.WAHA_API_KEY } : {}),
+        },
       }
     );
 
-    return response.status === 200;
+    return response.status === 200 || response.status === 201;
   } catch (error: any) {
-    console.error("WhatsApp Send Error:", error.response?.data || error.message);
+    console.error(`[WAHA] Failed to send to ${chatId}`);
+    console.error(`[WAHA] Status:`, error.response?.status);
+    console.error(`[WAHA] Body:`, JSON.stringify(error.response?.data, null, 2));
+    console.error(`[WAHA] Message:`, error.message);
     return false;
   }
 }

@@ -3,61 +3,57 @@ import { supabase } from '@/lib/supabase';
 import { analyzeSupplierResponse } from '@/lib/ai';
 
 /**
- * Webhook that receives incoming messages from Meta/WhatsApp Cloud API
+ * Webhook that receives incoming messages from WAHA (WhatsApp Web gateway).
+ *
+ * WAHA payload shape:
+ *   { event: "message", session: "default", payload: { from: "18684744475@c.us", fromMe: false, body: "...", type: "chat" } }
  */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
 
-    // Verify it's a WhatsApp message event
-    if (body.object === 'whatsapp_business_account') {
-      const entry = body.entry?.[0];
-      const changes = entry?.changes?.[0];
-      const message = changes?.value?.messages?.[0];
-      
-      if (message && message.type === 'text') {
-        const fromNumber = `+${message.from}`; // e.g. +18685551001
-        const textMessage = message.text.body;
-        
-        console.log(`[WHATSAPP] Received reply from ${fromNumber}: "${textMessage}"`);
+    // Only process inbound messages — ignore outgoing acks and session status events
+    if (body.event === 'message' && body.payload?.fromMe === false) {
+      const textMessage: string = body.payload.body;
 
-        // 1. Look up which supplier this is
-        const { data: supplier } = await supabase
-          .from('suppliers')
-          .select('id')
-          .eq('whatsapp_number', fromNumber)
+      console.log(`[WHATSAPP] Inbound message: "${textMessage}"`);
+
+      // Find the most-recently contacted supplier_response row.
+      // TODO: match by supplier phone number once WAHA LID→E.164 resolution is available.
+      const { data: activeResponse, error: responseError } = await supabase
+        .from('supplier_responses')
+        .select('*')
+        .eq('status', 'contacted')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      console.log('[DEBUG] Active response lookup:', JSON.stringify({ activeResponse, responseError }));
+
+      if (activeResponse) {
+        // Analyse the reply with AI
+        const analysis = await analyzeSupplierResponse(textMessage);
+        console.log(`[AI] Response analysis:`, analysis);
+
+        const { data: updatedRow, error: updateError } = await supabase
+          .from('supplier_responses')
+          .update({
+            status: 'replied',
+            price: analysis.price,
+            response_text: textMessage,
+            responded_at: new Date().toISOString(),
+          })
+          .eq('id', activeResponse.id)
+          .select()
           .single();
 
-        if (supplier) {
-           // 2. Find their active "contacted" inquiry
-           const { data: activeResponse } = await supabase
-            .from('supplier_responses')
-            .select('*')
-            .eq('supplier_id', supplier.id)
-            .eq('status', 'contacted')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single();
-
-           if (activeResponse) {
-             // 3. Analyze the message with AI to see if it's Yes/No/Checking
-             const analysis = await analyzeSupplierResponse(textMessage);
-             console.log(`[AI] Response analysis:`, analysis);
-
-             // 4. Mark it as replied and save the results
-             await supabase.from('supplier_responses')
-              .update({ 
-                status: 'replied',
-                price_quoted: analysis.price, 
-                raw_response: textMessage,
-                responded_at: new Date().toISOString(),
-                // availability_flag: analysis.availability // In V2 we'd add this column
-              })
-              .eq('id', activeResponse.id);
-             
-             console.log(`[SYS] Logged AI-parsed response for inquiry ${activeResponse.inquiry_id}`);
-           }
+        if (updateError) {
+          console.error(`[SYS] Update failed for response ${activeResponse.id}:`, updateError);
+        } else {
+          console.log(`[SYS] Row updated OK — id: ${updatedRow.id} | status: ${updatedRow.status} | inquiry: ${updatedRow.inquiry_id} | price: ${updatedRow.price}`);
         }
+      } else {
+        console.warn(`[SYS] No active contacted row found — responseError: ${JSON.stringify(responseError)}`);
       }
     }
 
