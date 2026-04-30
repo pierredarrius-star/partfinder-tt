@@ -1,7 +1,12 @@
+import { createBrowserClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-// Export the singleton instance of the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Existing anonymous client — keeps all current API routes and DB queries working
+export const supabase = createClient(url, anonKey)
+
+// For Client Components ("use client")
+export const createBrowserSupabaseClient = () =>
+  createBrowserClient(url, anonKey)
