@@ -75,7 +75,7 @@ export async function GET(request: Request) {
   const challenge = url.searchParams.get('hub.challenge');
 
   // Any random string you define in your Meta App Dashboard
-  const VERIFY_TOKEN = "pathfinder_secret_webhook_token_2026"; 
+  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? ''
 
   if (mode && token) {
     if (mode === 'subscribe' && token === VERIFY_TOKEN) {
