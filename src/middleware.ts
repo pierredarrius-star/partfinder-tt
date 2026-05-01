@@ -8,9 +8,9 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request })
   const supabase = createMiddlewareSupabaseClient(request, response)
 
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (PROTECTED.some(p => request.nextUrl.pathname.startsWith(p)) && !session) {
+  if (PROTECTED.some(p => request.nextUrl.pathname.startsWith(p)) && !user) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', request.nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
