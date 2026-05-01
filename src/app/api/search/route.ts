@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { waitUntil } from '@vercel/functions';
 import { supabase } from '@/lib/supabase';
 import { executeParallelSearch } from '@/lib/orchestrator';
+
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   try {
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
     // 4. Trigger the AI Workflow in the background
     // We execute this without awaiting so the user isn't stuck waiting for the UI to load
     // In production, this would be pushed to a queue (like Inngest, Upstash, or Supabase Edge Functions)
-    executeParallelSearch(inquiry.id, fullQuery).catch(console.error);
+    waitUntil(executeParallelSearch(inquiry.id, fullQuery).catch(console.error));
 
     return NextResponse.json({
       success: true,
