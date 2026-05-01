@@ -10,6 +10,7 @@ export default function Profile() {
   const [isUploading, setIsUploading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [sessionChecked, setSessionChecked] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const supabase = createBrowserSupabaseClient();
@@ -21,6 +22,7 @@ export default function Profile() {
         return;
       }
       setUserEmail(session.user?.email ?? null);
+      setSessionChecked(true);
     });
   }, []);
 
@@ -48,6 +50,8 @@ export default function Profile() {
       }, 2000);
     }
   };
+
+  if (!sessionChecked) return null;
 
   return (
     <div className="flex flex-col h-full bg-slate-50 min-h-screen relative">
