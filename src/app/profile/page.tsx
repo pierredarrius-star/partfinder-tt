@@ -32,7 +32,7 @@ export default function Profile() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    router.replace('/login');
+    window.location.href = '/login';
   };
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
