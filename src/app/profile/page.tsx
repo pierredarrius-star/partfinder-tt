@@ -107,7 +107,7 @@ export default function Profile() {
   }
 
   const handleDelete = async (v: Vehicle) => {
-    if (!confirm(`Delete this ${v.year} ${v.make} ${v.model}? This cannot be undone.`)) return
+    if (!confirm(`Delete this ${v.year} ${v.brand} ${v.name}? This cannot be undone.`)) return
 
     const { error } = await supabase.from('user_vehicles').delete().eq('id', v.id)
     if (error) {
@@ -211,7 +211,7 @@ export default function Profile() {
                     <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Primary</span>
                   )}
                 </div>
-                {(v.trim || v.engine) && (
+                {(v.model_code || v.engine) && (
                   <p className="text-xs text-slate-500 mt-0.5">{[v.model_code, v.engine].filter(Boolean).join(' · ')}</p>
                 )}
               </div>
