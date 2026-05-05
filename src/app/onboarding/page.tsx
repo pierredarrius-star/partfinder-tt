@@ -66,13 +66,13 @@ export default function OnboardingPage() {
       },
       body: JSON.stringify({
         year,
-        make: make.trim(),
-        model: model.trim(),
-        trim: trim.trim(),
-        engine: engine.trim(),
+        make: make.trim().toLowerCase(),
+        model: model.trim().toLowerCase(),
+        trim: trim.trim().toLowerCase(),
+        engine: engine.trim().toUpperCase(),
         color_code: colorCode.trim(),
-        color_name: colorName.trim(),
-        nickname: nickname.trim(),
+        color_name: colorName.trim().toLowerCase(),
+        nickname: nickname.trim().toLowerCase(),
       }),
     })
 

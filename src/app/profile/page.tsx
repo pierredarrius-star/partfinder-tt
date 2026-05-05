@@ -25,6 +25,8 @@ type Vehicle = {
   is_primary: boolean
 }
 
+const titleCase = (s: string | null) => s ? s.replace(/\b\w/g, c => c.toUpperCase()) : s
+
 const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -175,13 +177,13 @@ export default function Profile() {
             <div className="flex items-start justify-between mb-1">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-slate-800">{v.year} {v.make} {v.model}</h3>
+                  <h3 className="font-bold text-slate-800">{v.year} {titleCase(v.make)} {titleCase(v.model)}</h3>
                   {v.is_primary && (
                     <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Primary</span>
                   )}
                 </div>
                 {(v.trim || v.engine) && (
-                  <p className="text-xs text-slate-500 mt-0.5">{[v.trim, v.engine].filter(Boolean).join(' · ')}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{[titleCase(v.trim), v.engine].filter(Boolean).join(' · ')}</p>
                 )}
               </div>
             </div>
@@ -190,13 +192,13 @@ export default function Profile() {
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Color</p>
                 <p className="text-xs font-semibold text-slate-700">
-                  {v.color_name ?? '—'}
+                  {titleCase(v.color_name) ?? '—'}
                   {v.color_code && <span className="text-slate-400 font-normal"> · {v.color_code}</span>}
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Nickname</p>
-                <p className="text-xs font-semibold text-slate-700">{v.nickname ?? '—'}</p>
+                <p className="text-xs font-semibold text-slate-700">{titleCase(v.nickname) ?? '—'}</p>
               </div>
               <div>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Frame</p>
