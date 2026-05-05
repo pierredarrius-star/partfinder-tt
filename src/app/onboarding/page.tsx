@@ -4,12 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 
-
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
   const [showInfo, setShowInfo] = useState(false)
 
+  const [fullName, setFullName] = useState('')
+  const [whatsappNumber, setWhatsappNumber] = useState('')
   const [year, setYear] = useState('')
   const [make, setMake] = useState('')
   const [model, setModel] = useState('')
@@ -24,6 +25,10 @@ export default function OnboardingPage() {
 
   async function handleSave() {
     setError(null)
+    if (!fullName.trim() || !whatsappNumber.trim()) {
+      setError('Full name and WhatsApp number are required.')
+      return
+    }
     if (!year.trim() || !make.trim() || !model.trim()) {
       setError('Year, make, and model are required.')
       return
@@ -36,7 +41,20 @@ export default function OnboardingPage() {
 
     if (!session) {
       setLoading(false)
-      setError('You must be logged in to save a vehicle. Please log in and try again.')
+      setError('You must be logged in to save. Please log in and try again.')
+      return
+    }
+
+    const { error: profileError } = await supabase.from('user_profiles').upsert({
+      user_id: session.user.id,
+      full_name: fullName.trim(),
+      whatsapp_number: whatsappNumber.trim(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+
+    if (profileError) {
+      setLoading(false)
+      setError(profileError.message)
       return
     }
 
@@ -44,7 +62,7 @@ export default function OnboardingPage() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token ?? ''}`,
+        'Authorization': `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         year,
@@ -85,39 +103,27 @@ export default function OnboardingPage() {
             <p className="text-sm text-slate-500 mb-3">The plate shows your frame number, engine code, colour and trim</p>
 
             <svg viewBox="0 0 400 200" className="w-full mb-4" xmlns="http://www.w3.org/2000/svg">
-              {/* Car body */}
               <path
                 d="M 365 152 L 368 148 L 368 126 L 360 110 L 344 98 L 312 98 L 282 74 L 252 60 L 175 60 L 140 65 L 104 88 L 68 105 L 45 118 L 35 138 L 35 152 L 78 152 A 26 20 0 0 0 130 152 L 270 152 A 26 20 0 0 0 322 152 Z"
                 fill="#e2e8f0" stroke="#475569" strokeWidth="2" strokeLinejoin="round"
               />
-              {/* Wheels */}
               <circle cx="104" cy="160" r="22" fill="#334155" stroke="#1e293b" strokeWidth="2" />
               <circle cx="104" cy="160" r="8" fill="#94a3b8" />
               <circle cx="296" cy="160" r="22" fill="#334155" stroke="#1e293b" strokeWidth="2" />
               <circle cx="296" cy="160" r="8" fill="#94a3b8" />
-              {/* Windows */}
               <path d="M 108 88 L 140 65 L 166 65 L 162 84 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
               <path d="M 162 84 L 166 65 L 252 60 L 263 84 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
               <path d="M 263 84 L 282 74 L 312 98 L 270 98 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
-              {/* B-pillar */}
               <line x1="200" y1="84" x2="200" y2="136" stroke="#94a3b8" strokeWidth="1.5" />
-
-              {/* 1 — Driver door jamb */}
               <line x1="200" y1="118" x2="178" y2="118" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
               <circle cx="167" cy="118" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
               <text x="167" y="122" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">1</text>
-
-              {/* 2 — Firewall */}
               <line x1="314" y1="104" x2="334" y2="86" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
               <circle cx="343" cy="78" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
               <text x="343" y="82" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">2</text>
-
-              {/* 3 — Interior dash */}
               <line x1="268" y1="78" x2="250" y2="57" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
               <circle cx="242" cy="48" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
               <text x="242" y="52" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">3</text>
-
-              {/* 4 — Front of frame */}
               <line x1="364" y1="143" x2="381" y2="156" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
               <circle cx="387" cy="164" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
               <text x="387" y="168" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">4</text>
@@ -156,7 +162,6 @@ export default function OnboardingPage() {
         <h1 className="text-2xl font-bold text-slate-800 tracking-tight">What vehicle do you drive?</h1>
         <p className="text-sm text-slate-500 mt-1 leading-snug">Add your vehicle for faster, more accurate part searches</p>
 
-        {/* Quick action buttons */}
         <div className="flex gap-3 mt-4">
           <div className="flex items-center gap-1.5">
             <button className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors active:scale-[0.97]">
@@ -176,7 +181,6 @@ export default function OnboardingPage() {
               </svg>
             </button>
           </div>
-
           <button className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors active:scale-[0.97]">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -192,94 +196,123 @@ export default function OnboardingPage() {
       <main className="flex-1 px-4 py-6 overflow-y-auto pb-10">
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 space-y-4">
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Year</label>
-              <input
-                type="number"
-                placeholder="e.g. 2012"
-                value={year}
-                onChange={(e) => setYear(e.target.value)}
-                className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Make</label>
-              <input
-                type="text"
-                placeholder="e.g. Toyota"
-                value={make}
-                onChange={(e) => setMake(e.target.value)}
-                className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-              />
-            </div>
-          </div>
-
+          {/* Profile fields */}
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Model</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Full Name</label>
             <input
               type="text"
-              placeholder="e.g. Corolla Axio"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
+              placeholder="e.g. John Smith"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
               className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Trim / Variant</label>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">WhatsApp Number</label>
             <input
-              type="text"
-              placeholder="e.g. NZE144"
-              value={trim}
-              onChange={(e) => setTrim(e.target.value)}
+              type="tel"
+              placeholder="868-XXX-XXXX"
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
               className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Engine</label>
-            <input
-              type="text"
-              placeholder="e.g. 1NZ-FE"
-              value={engine}
-              onChange={(e) => setEngine(e.target.value)}
-              className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-            />
-          </div>
+          <div className="border-t border-slate-100 pt-4">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Vehicle Details</p>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color Code</label>
-              <input
-                type="text"
-                placeholder="e.g. 040, ZHJ, 1F7"
-                value={colorCode}
-                onChange={(e) => setColorCode(e.target.value)}
-                className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-              />
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Year</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 2012"
+                    value={year}
+                    onChange={(e) => setYear(e.target.value)}
+                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Make</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Toyota"
+                    value={make}
+                    onChange={(e) => setMake(e.target.value)}
+                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Model</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Corolla Axio"
+                  value={model}
+                  onChange={(e) => setModel(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Trim / Variant</label>
+                <input
+                  type="text"
+                  placeholder="e.g. NZE144"
+                  value={trim}
+                  onChange={(e) => setTrim(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Engine</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 1NZ-FE"
+                  value={engine}
+                  onChange={(e) => setEngine(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 040, ZHJ, 1F7"
+                    value={colorCode}
+                    onChange={(e) => setColorCode(e.target.value)}
+                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. White, Silver, Black"
+                    value={colorName}
+                    onChange={(e) => setColorName(e.target.value)}
+                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nickname (Optional)</label>
+                <input
+                  type="text"
+                  placeholder={`e.g. "My Corolla", "Wife's Car", "Work Truck"`}
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
-              <input
-                type="text"
-                placeholder="e.g. White, Silver, Black"
-                value={colorName}
-                onChange={(e) => setColorName(e.target.value)}
-                className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nickname (Optional)</label>
-            <input
-              type="text"
-              placeholder={`e.g. "My Corolla", "Wife's Car", "Work Truck"`}
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
-            />
           </div>
 
         </div>
