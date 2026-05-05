@@ -19,10 +19,10 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const { year, make, model, trim, engine, color_code, color_name, nickname } = body
+  const { year, vin, brand, name, model_code, body: bodyStyle, engine, color_code, color_name, nickname, frame_number } = body
 
-  if (!year || !make || !model) {
-    return NextResponse.json({ error: 'Year, make, and model are required' }, { status: 400 })
+  if (!year || !brand || !name || !bodyStyle || !engine) {
+    return NextResponse.json({ error: 'Year, brand, name, body, and engine are required' }, { status: 400 })
   }
 
   const { data, error } = await serviceClient
@@ -30,13 +30,16 @@ export async function POST(request: Request) {
     .insert({
       user_id: user.id,
       year: parseInt(year, 10),
-      make,
-      model,
-      trim: trim || null,
-      engine: engine || null,
+      vin: vin || null,
+      brand,
+      name,
+      model_code: model_code || null,
+      body: bodyStyle,
+      engine,
       color_code: color_code || null,
       color_name: color_name || null,
       nickname: nickname || null,
+      frame_number: frame_number || null,
       is_primary: true,
     })
     .select()

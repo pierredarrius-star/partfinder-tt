@@ -11,10 +11,12 @@ export default function OnboardingPage() {
 
   const [fullName, setFullName] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
+  const [vin, setVin] = useState('')
   const [year, setYear] = useState('')
-  const [make, setMake] = useState('')
-  const [model, setModel] = useState('')
-  const [trim, setTrim] = useState('')
+  const [brand, setBrand] = useState('')
+  const [name, setName] = useState('')
+  const [modelCode, setModelCode] = useState('')
+  const [body, setBody] = useState('')
   const [engine, setEngine] = useState('')
   const [colorCode, setColorCode] = useState('')
   const [colorName, setColorName] = useState('')
@@ -29,8 +31,8 @@ export default function OnboardingPage() {
       setError('Full name and WhatsApp number are required.')
       return
     }
-    if (!year.trim() || !make.trim() || !model.trim()) {
-      setError('Year, make, and model are required.')
+    if (!year.trim() || !brand.trim() || !name.trim() || !body.trim() || !engine.trim()) {
+      setError('Year, brand, name, body, and engine are required.')
       return
     }
 
@@ -66,13 +68,15 @@ export default function OnboardingPage() {
       },
       body: JSON.stringify({
         year,
-        make: make.trim().toLowerCase(),
-        model: model.trim().toLowerCase(),
-        trim: trim.trim().toLowerCase(),
+        vin: vin.trim().toUpperCase() || null,
+        brand: brand.trim().toLowerCase(),
+        name: name.trim().toLowerCase(),
+        model_code: modelCode.trim().toLowerCase() || null,
+        body: body.trim().toLowerCase(),
         engine: engine.trim().toUpperCase(),
-        color_code: colorCode.trim(),
-        color_name: colorName.trim().toLowerCase(),
-        nickname: nickname.trim().toLowerCase(),
+        color_code: colorCode.trim() || null,
+        color_name: colorName.trim().toLowerCase() || null,
+        nickname: nickname.trim().toLowerCase() || null,
       }),
     })
 
@@ -223,6 +227,17 @@ export default function OnboardingPage() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Vehicle Details</p>
 
             <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. JT2AE09W9J0123456"
+                  value={vin}
+                  onChange={(e) => setVin(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Year</label>
@@ -235,35 +250,46 @@ export default function OnboardingPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Make</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Brand</label>
                   <input
                     type="text"
                     placeholder="e.g. Toyota"
-                    value={make}
-                    onChange={(e) => setMake(e.target.value)}
+                    value={brand}
+                    onChange={(e) => setBrand(e.target.value)}
                     className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Model</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Corolla Axio"
-                  value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
                   className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Trim / Variant</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Model</label>
                 <input
                   type="text"
-                  placeholder="e.g. NZE144"
-                  value={trim}
-                  onChange={(e) => setTrim(e.target.value)}
+                  placeholder="e.g. DBA-NZE144-AEXNK(nze144)"
+                  value={modelCode}
+                  onChange={(e) => setModelCode(e.target.value)}
+                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Body</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sedan"
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
                   className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
                 />
               </div>
@@ -294,7 +320,7 @@ export default function OnboardingPage() {
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
                   <input
                     type="text"
-                    placeholder="e.g. White, Silver, Black"
+                    placeholder="e.g. Super White"
                     value={colorName}
                     onChange={(e) => setColorName(e.target.value)}
                     className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"

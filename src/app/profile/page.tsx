@@ -13,9 +13,11 @@ type UserProfile = {
 type Vehicle = {
   id: string
   year: number
-  make: string
-  model: string
-  trim: string | null
+  vin: string | null
+  brand: string
+  name: string
+  model_code: string | null
+  body: string | null
   engine: string | null
   color_code: string | null
   color_name: string | null
@@ -204,13 +206,13 @@ export default function Profile() {
             <div className="flex items-start justify-between mb-1">
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-slate-800">{v.year} {titleCase(v.make)} {titleCase(v.model)}</h3>
+                  <h3 className="font-bold text-slate-800">{v.year} {titleCase(v.brand)} {titleCase(v.name)}</h3>
                   {v.is_primary && (
                     <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Primary</span>
                   )}
                 </div>
                 {(v.trim || v.engine) && (
-                  <p className="text-xs text-slate-500 mt-0.5">{[titleCase(v.trim), v.engine].filter(Boolean).join(' · ')}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{[v.model_code, v.engine].filter(Boolean).join(' · ')}</p>
                 )}
               </div>
               <button
@@ -235,9 +237,9 @@ export default function Profile() {
                 <p className="text-xs font-semibold text-slate-700">{titleCase(v.nickname) ?? '—'}</p>
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Frame</p>
-                {v.frame_number
-                  ? <p className="text-xs font-semibold text-slate-700">{v.frame_number}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">VIN</p>
+                {v.vin
+                  ? <p className="text-xs font-semibold text-slate-700">{v.vin}</p>
                   : <p className="text-xs text-slate-400 italic">Not set</p>
                 }
               </div>
