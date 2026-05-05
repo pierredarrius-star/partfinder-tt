@@ -23,6 +23,7 @@ type Vehicle = {
   frame_number: string | null
   manual_url: string | null
   is_primary: boolean
+  created_at: string
 }
 
 const titleCase = (s: string | null) => s ? s.replace(/\b\w/g, c => c.toUpperCase()) : s
@@ -31,6 +32,12 @@ const PencilIcon = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+)
+
+const TrashIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
   </svg>
 )
 
@@ -95,6 +102,26 @@ export default function Profile() {
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
+  }
+
+  const handleDelete = async (v: Vehicle) => {
+    if (!confirm(`Delete this ${v.year} ${v.make} ${v.model}? This cannot be undone.`)) return
+
+    const { error } = await supabase.from('user_vehicles').delete().eq('id', v.id)
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const remaining = vehicles.filter(x => x.id !== v.id)
+
+    if (v.is_primary && remaining.length > 0) {
+      const oldest = remaining.reduce((a, b) => a.created_at < b.created_at ? a : b)
+      await supabase.from('user_vehicles').update({ is_primary: true }).eq('id', oldest.id)
+      setVehicles(remaining.map(x => ({ ...x, is_primary: x.id === oldest.id })))
+    } else {
+      setVehicles(remaining)
+    }
   }
 
   if (loading) return null
@@ -186,6 +213,13 @@ export default function Profile() {
                   <p className="text-xs text-slate-500 mt-0.5">{[titleCase(v.trim), v.engine].filter(Boolean).join(' · ')}</p>
                 )}
               </div>
+              <button
+                onClick={() => handleDelete(v)}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0 ml-2"
+                aria-label="Delete vehicle"
+              >
+                <TrashIcon />
+              </button>
             </div>
 
             <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-x-4 gap-y-3">
