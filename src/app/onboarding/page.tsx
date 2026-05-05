@@ -101,56 +101,69 @@ export default function OnboardingPage() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setShowInfo(false)}
           />
-          <div className="relative w-full max-w-md bg-white rounded-t-3xl px-6 pt-5 pb-10 shadow-2xl">
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl px-4 pt-5 pb-10 shadow-2xl" style={{ minWidth: 340 }}>
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-            <h3 className="text-base font-bold text-slate-800 mb-1">Where to find your compliance plate</h3>
-            <p className="text-sm text-slate-500 mb-3">The plate shows your frame number, engine code, colour and trim</p>
 
-            <svg viewBox="0 0 400 200" className="w-full mb-4" xmlns="http://www.w3.org/2000/svg">
-              <path
-                d="M 365 152 L 368 148 L 368 126 L 360 110 L 344 98 L 312 98 L 282 74 L 252 60 L 175 60 L 140 65 L 104 88 L 68 105 L 45 118 L 35 138 L 35 152 L 78 152 A 26 20 0 0 0 130 152 L 270 152 A 26 20 0 0 0 322 152 Z"
-                fill="#e2e8f0" stroke="#475569" strokeWidth="2" strokeLinejoin="round"
-              />
-              <circle cx="104" cy="160" r="22" fill="#334155" stroke="#1e293b" strokeWidth="2" />
-              <circle cx="104" cy="160" r="8" fill="#94a3b8" />
-              <circle cx="296" cy="160" r="22" fill="#334155" stroke="#1e293b" strokeWidth="2" />
-              <circle cx="296" cy="160" r="8" fill="#94a3b8" />
-              <path d="M 108 88 L 140 65 L 166 65 L 162 84 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
-              <path d="M 162 84 L 166 65 L 252 60 L 263 84 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
-              <path d="M 263 84 L 282 74 L 312 98 L 270 98 Z" fill="#bfdbfe" stroke="#475569" strokeWidth="1.5" />
-              <line x1="200" y1="84" x2="200" y2="136" stroke="#94a3b8" strokeWidth="1.5" />
-              <line x1="200" y1="118" x2="178" y2="118" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
-              <circle cx="167" cy="118" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
-              <text x="167" y="122" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">1</text>
-              <line x1="314" y1="104" x2="334" y2="86" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
-              <circle cx="343" cy="78" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
-              <text x="343" y="82" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">2</text>
-              <line x1="268" y1="78" x2="250" y2="57" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
-              <circle cx="242" cy="48" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
-              <text x="242" y="52" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">3</text>
-              <line x1="364" y1="143" x2="381" y2="156" stroke="#ef4444" strokeWidth="1.5" strokeDasharray="3 2" />
-              <circle cx="387" cy="164" r="11" fill="#ef4444" stroke="white" strokeWidth="1.5" />
-              <text x="387" y="168" textAnchor="middle" fill="white" fontSize="11" fontWeight="bold">4</text>
+            <svg width="100%" viewBox="0 0 380 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VIN locations on a sedan" className="mb-4">
+              <style>{`
+                .car-line { fill: none; stroke: #2A2A2A; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+                .car-fine { fill: none; stroke: #2A2A2A; stroke-width: 0.7; stroke-linecap: round; }
+                .marker-dot { fill: #D32F2F; stroke: #fff; stroke-width: 1.5; }
+                .leader { stroke: #D32F2F; stroke-width: 1; fill: none; }
+                .callout-box { fill: #fff; stroke: #D32F2F; stroke-width: 1; }
+                .callout-text { fill: #2A2A2A; font-size: 10px; font-family: system-ui, sans-serif; font-weight: 500; }
+                @media (prefers-color-scheme: dark) {
+                  .car-line { stroke: #E8E8E8; }
+                  .car-fine { stroke: #C0C0C0; }
+                  .callout-box { fill: #1F1F1F; }
+                  .callout-text { fill: #E8E8E8; }
+                }
+              `}</style>
+              <path className="car-line" d="M 70 195 L 80 195 M 105 195 L 240 195 M 265 195 L 305 195 Q 318 195 322 188 L 328 168 Q 330 162 326 159 L 285 150 L 252 116 Q 244 108 232 107 L 162 107 Q 152 108 144 116 L 112 150 L 70 158 Q 64 160 64 166 L 64 188 Q 64 195 70 195 Z"/>
+              <path className="car-line" d="M 122 150 L 152 116 Q 158 110 168 110 L 228 110 Q 238 112 244 120 L 270 150 Z"/>
+              <line className="car-fine" x1="195" y1="110" x2="195" y2="150"/>
+              <line className="car-fine" x1="155" y1="150" x2="155" y2="195"/>
+              <line className="car-fine" x1="195" y1="150" x2="195" y2="195"/>
+              <rect x="170" y="168" width="14" height="3" rx="1" className="car-line"/>
+              <rect x="210" y="168" width="14" height="3" rx="1" className="car-line"/>
+              <line className="car-fine" x1="112" y1="150" x2="144" y2="120"/>
+              <line className="car-fine" x1="244" y1="120" x2="285" y2="150"/>
+              <ellipse className="car-line" cx="78" cy="170" rx="8" ry="5"/>
+              <line className="car-fine" x1="65" y1="180" x2="75" y2="180"/>
+              <line className="car-fine" x1="65" y1="184" x2="75" y2="184"/>
+              <rect x="313" y="168" width="10" height="6" rx="1" className="car-line"/>
+              <path className="car-line" d="M 80 195 Q 92 178 105 195"/>
+              <path className="car-line" d="M 240 195 Q 252 178 265 195"/>
+              <circle className="car-line" cx="92" cy="200" r="13"/>
+              <circle className="car-fine" cx="92" cy="200" r="6"/>
+              <circle className="car-line" cx="252" cy="200" r="13"/>
+              <circle className="car-fine" cx="252" cy="200" r="6"/>
+              <line className="car-fine" x1="106" y1="172" x2="240" y2="172"/>
+              <circle className="marker-dot" cx="120" cy="148" r="5"/>
+              <path className="leader" d="M 120 148 L 120 60 L 95 60"/>
+              <rect className="callout-box" x="20" y="48" width="115" height="26" rx="2"/>
+              <text className="callout-text" x="27" y="60">1. Under the hood</text>
+              <text className="callout-text" x="27" y="71" fill="#777">(engine bay)</text>
+              <circle className="marker-dot" cx="170" cy="172" r="5"/>
+              <path className="leader" d="M 170 172 L 170 248 L 110 248"/>
+              <rect className="callout-box" x="20" y="236" width="135" height="26" rx="2"/>
+              <text className="callout-text" x="27" y="248">2. Driver&apos;s door jamb</text>
+              <text className="callout-text" x="27" y="259" fill="#777">(open door, look at frame)</text>
+              <circle className="marker-dot" cx="265" cy="148" r="5"/>
+              <path className="leader" d="M 265 148 L 265 60 L 290 60"/>
+              <rect className="callout-box" x="245" y="48" width="120" height="26" rx="2"/>
+              <text className="callout-text" x="252" y="60">3. Under boot lid</text>
+              <text className="callout-text" x="252" y="71" fill="#777">(open trunk, look up)</text>
+              <circle className="marker-dot" cx="295" cy="178" r="5"/>
+              <path className="leader" d="M 295 178 L 295 248 L 240 248"/>
+              <rect className="callout-box" x="225" y="236" width="135" height="26" rx="2"/>
+              <text className="callout-text" x="232" y="248">4. Inside trunk panel</text>
+              <text className="callout-text" x="232" y="259" fill="#777">(side wall, behind carpet)</text>
+              <text x="190" y="22" fontSize="14" fontFamily="system-ui, sans-serif" fontWeight="500" textAnchor="middle" fill="currentColor">Where to find your VIN / plate</text>
+              <text x="190" y="38" fontSize="11" fontFamily="system-ui, sans-serif" textAnchor="middle" fill="#777">The 4 most common locations</text>
+              <text x="190" y="298" fontSize="10" fontFamily="system-ui, sans-serif" textAnchor="middle" fill="#777">Can&apos;t find it? Check your vehicle title or insurance card.</text>
             </svg>
 
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 mb-6">
-              {[
-                { n: 1, label: "Driver's door jamb", sub: 'Most common' },
-                { n: 2, label: 'Under the bonnet', sub: 'Engine bay firewall' },
-                { n: 3, label: 'Interior dash', sub: 'Behind the windshield' },
-                { n: 4, label: 'Front of frame', sub: 'Front bumper area' },
-              ].map(({ n, label, sub }) => (
-                <div key={n} className="flex items-start gap-2">
-                  <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center shrink-0 mt-0.5">
-                    <span className="text-white text-xs font-bold leading-none">{n}</span>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-800 leading-tight">{label}</p>
-                    <p className="text-xs text-slate-500 leading-tight">{sub}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
             <button
               onClick={() => setShowInfo(false)}
               className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3.5 rounded-2xl transition-colors active:scale-[0.98]"
