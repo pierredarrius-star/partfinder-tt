@@ -10,6 +10,19 @@ export async function GET(request: NextRequest) {
   if (code) {
     const supabase = await createServerSupabaseClient()
     await supabase.auth.exchangeCodeForSession(code)
+
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (user) {
+      const { count } = await supabase
+        .from('user_vehicles')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+
+      if (!count) {
+        return NextResponse.redirect(new URL('/onboarding', origin))
+      }
+    }
   }
 
   return NextResponse.redirect(new URL(next, origin))
