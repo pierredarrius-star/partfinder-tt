@@ -101,75 +101,83 @@ export default function OnboardingPage() {
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setShowInfo(false)}
           />
-          <div className="relative w-full max-w-md bg-white rounded-t-3xl px-4 pt-5 pb-10 shadow-2xl" style={{ minWidth: 340 }}>
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl pt-5 pb-10 shadow-2xl overflow-y-auto max-h-[90vh]">
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
 
-            <svg width="100%" viewBox="0 0 380 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="VIN locations on a sedan" className="mb-4">
-              <style>{`
-                .car-line { fill: none; stroke: #2A2A2A; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
-                .car-fine { fill: none; stroke: #2A2A2A; stroke-width: 0.7; stroke-linecap: round; }
-                .marker-dot { fill: #D32F2F; stroke: #fff; stroke-width: 1.5; }
-                .leader { stroke: #D32F2F; stroke-width: 1; fill: none; }
-                .callout-box { fill: #fff; stroke: #D32F2F; stroke-width: 1; }
-                .callout-text { fill: #2A2A2A; font-size: 10px; font-family: system-ui, sans-serif; font-weight: 500; }
-                @media (prefers-color-scheme: dark) {
-                  .car-line { stroke: #E8E8E8; }
-                  .car-fine { stroke: #C0C0C0; }
-                  .callout-box { fill: #1F1F1F; }
-                  .callout-text { fill: #E8E8E8; }
-                }
-              `}</style>
-              <path className="car-line" d="M 70 195 L 80 195 M 105 195 L 240 195 M 265 195 L 305 195 Q 318 195 322 188 L 328 168 Q 330 162 326 159 L 285 150 L 252 116 Q 244 108 232 107 L 162 107 Q 152 108 144 116 L 112 150 L 70 158 Q 64 160 64 166 L 64 188 Q 64 195 70 195 Z"/>
-              <path className="car-line" d="M 122 150 L 152 116 Q 158 110 168 110 L 228 110 Q 238 112 244 120 L 270 150 Z"/>
-              <line className="car-fine" x1="195" y1="110" x2="195" y2="150"/>
-              <line className="car-fine" x1="155" y1="150" x2="155" y2="195"/>
-              <line className="car-fine" x1="195" y1="150" x2="195" y2="195"/>
-              <rect x="170" y="168" width="14" height="3" rx="1" className="car-line"/>
-              <rect x="210" y="168" width="14" height="3" rx="1" className="car-line"/>
-              <line className="car-fine" x1="112" y1="150" x2="144" y2="120"/>
-              <line className="car-fine" x1="244" y1="120" x2="285" y2="150"/>
-              <ellipse className="car-line" cx="78" cy="170" rx="8" ry="5"/>
-              <line className="car-fine" x1="65" y1="180" x2="75" y2="180"/>
-              <line className="car-fine" x1="65" y1="184" x2="75" y2="184"/>
-              <rect x="313" y="168" width="10" height="6" rx="1" className="car-line"/>
-              <path className="car-line" d="M 80 195 Q 92 178 105 195"/>
-              <path className="car-line" d="M 240 195 Q 252 178 265 195"/>
-              <circle className="car-line" cx="92" cy="200" r="13"/>
-              <circle className="car-fine" cx="92" cy="200" r="6"/>
-              <circle className="car-line" cx="252" cy="200" r="13"/>
-              <circle className="car-fine" cx="252" cy="200" r="6"/>
-              <line className="car-fine" x1="106" y1="172" x2="240" y2="172"/>
-              <circle className="marker-dot" cx="120" cy="148" r="5"/>
-              <path className="leader" d="M 120 148 L 120 60 L 95 60"/>
-              <rect className="callout-box" x="20" y="48" width="115" height="26" rx="2"/>
-              <text className="callout-text" x="27" y="60">1. Under the hood</text>
-              <text className="callout-text" x="27" y="71" fill="#777">(engine bay)</text>
-              <circle className="marker-dot" cx="170" cy="172" r="5"/>
-              <path className="leader" d="M 170 172 L 170 248 L 110 248"/>
-              <rect className="callout-box" x="20" y="236" width="135" height="26" rx="2"/>
-              <text className="callout-text" x="27" y="248">2. Driver&apos;s door jamb</text>
-              <text className="callout-text" x="27" y="259" fill="#777">(open door, look at frame)</text>
-              <circle className="marker-dot" cx="265" cy="148" r="5"/>
-              <path className="leader" d="M 265 148 L 265 60 L 290 60"/>
-              <rect className="callout-box" x="245" y="48" width="120" height="26" rx="2"/>
-              <text className="callout-text" x="252" y="60">3. Under boot lid</text>
-              <text className="callout-text" x="252" y="71" fill="#777">(open trunk, look up)</text>
-              <circle className="marker-dot" cx="295" cy="178" r="5"/>
-              <path className="leader" d="M 295 178 L 295 248 L 240 248"/>
-              <rect className="callout-box" x="225" y="236" width="135" height="26" rx="2"/>
-              <text className="callout-text" x="232" y="248">4. Inside trunk panel</text>
-              <text className="callout-text" x="232" y="259" fill="#777">(side wall, behind carpet)</text>
-              <text x="190" y="22" fontSize="14" fontFamily="system-ui, sans-serif" fontWeight="500" textAnchor="middle" fill="currentColor">Where to find your VIN / plate</text>
-              <text x="190" y="38" fontSize="11" fontFamily="system-ui, sans-serif" textAnchor="middle" fill="#777">The 4 most common locations</text>
-              <text x="190" y="298" fontSize="10" fontFamily="system-ui, sans-serif" textAnchor="middle" fill="#777">Can&apos;t find it? Check your vehicle title or insurance card.</text>
-            </svg>
+            <div className="flex flex-col items-center gap-4 px-4 py-2">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold text-slate-800">Where to find your VIN / plate</h3>
+                <p className="text-sm text-slate-500 mt-1">The 4 most common locations</p>
+              </div>
 
-            <button
-              onClick={() => setShowInfo(false)}
-              className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3.5 rounded-2xl transition-colors active:scale-[0.98]"
-            >
-              Got it
-            </button>
+              <div className="relative w-full max-w-md">
+                <img
+                  src="/car-diagram.jpg"
+                  alt="Car showing VIN locations"
+                  className="w-full h-auto block"
+                />
+
+                {/* Marker 1: Front of frame */}
+                <div className="absolute" style={{ left: '22%', top: '70%' }}>
+                  <div className="relative">
+                    <div className="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-md" />
+                    <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-red-600 opacity-30 animate-ping" />
+                  </div>
+                </div>
+
+                {/* Marker 2: Engine bay */}
+                <div className="absolute" style={{ left: '32%', top: '52%' }}>
+                  <div className="relative">
+                    <div className="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-md" />
+                    <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-red-600 opacity-30 animate-ping" />
+                  </div>
+                </div>
+
+                {/* Marker 3: Driver's dash */}
+                <div className="absolute" style={{ left: '52%', top: '38%' }}>
+                  <div className="relative">
+                    <div className="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-md" />
+                    <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-red-600 opacity-30 animate-ping" />
+                  </div>
+                </div>
+
+                {/* Marker 4: Driver's door jamb */}
+                <div className="absolute" style={{ left: '64%', top: '58%' }}>
+                  <div className="relative">
+                    <div className="w-4 h-4 rounded-full bg-red-600 border-2 border-white shadow-md" />
+                    <div className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-red-600 opacity-30 animate-ping" />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 w-full text-sm">
+                {[
+                  { n: 1, label: 'Front of frame', sub: 'Near radiator support (older cars)' },
+                  { n: 2, label: 'Engine bay (under hood)', sub: 'Stamped on the engine block' },
+                  { n: 3, label: "Driver's side dash", sub: 'Visible through the windshield' },
+                  { n: 4, label: "Driver's door jamb", sub: 'Open driver door, look at the frame' },
+                ].map(({ n, label, sub }) => (
+                  <div key={n} className="flex items-start gap-3">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-red-600 text-white text-xs font-semibold flex items-center justify-center">{n}</span>
+                    <div>
+                      <div className="font-medium text-slate-800">{label}</div>
+                      <div className="text-xs text-slate-500">{sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-slate-400 text-center mt-2">Can&apos;t find it? Check your vehicle title or insurance card.</p>
+            </div>
+
+            <div className="px-4 mt-4">
+              <button
+                onClick={() => setShowInfo(false)}
+                className="w-full bg-brand-600 hover:bg-brand-500 text-white font-bold py-3.5 rounded-2xl transition-colors active:scale-[0.98]"
+              >
+                Got it
+              </button>
+            </div>
           </div>
         </div>
       )}
