@@ -28,6 +28,11 @@ type Vehicle = {
   created_at: string
 }
 
+type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 const titleCase = (s: string | null) => s ? s.replace(/\b\w/g, c => c.toUpperCase()) : s
 
 const PencilIcon = () => (
@@ -43,6 +48,30 @@ const TrashIcon = () => (
   </svg>
 )
 
+const ChatBubbleIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+)
+
+const SendIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+)
+
+const XIcon = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+)
+
+const EarlAvatar = ({ size = 'md' }: { size?: 'sm' | 'md' }) => (
+  <div className={`${size === 'sm' ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'} bg-brand-600 rounded-full flex items-center justify-center text-white font-bold shrink-0`}>
+    E
+  </div>
+)
+
 export default function Profile() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
@@ -52,7 +81,17 @@ export default function Profile() {
   const [userEmail, setUserEmail] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [accessToken, setAccessToken] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  // Earl chat state
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
+  const [showPulse, setShowPulse] = useState(true)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     async function load() {
@@ -63,6 +102,7 @@ export default function Profile() {
       }
 
       setUserEmail(session.user.email ?? null)
+      setAccessToken(session.access_token)
 
       const [profileRes, vehiclesRes] = await Promise.all([
         supabase
@@ -101,6 +141,22 @@ export default function Profile() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [menuOpen])
 
+  // Auto-dismiss pulse ring after 4 seconds
+  useEffect(() => {
+    const t = setTimeout(() => setShowPulse(false), 4000)
+    return () => clearTimeout(t)
+  }, [])
+
+  // Auto-scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages, chatLoading])
+
+  // Focus input when chat opens
+  useEffect(() => {
+    if (chatOpen) setTimeout(() => inputRef.current?.focus(), 300)
+  }, [chatOpen])
+
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     window.location.href = '/login'
@@ -125,6 +181,50 @@ export default function Profile() {
       setVehicles(remaining)
     }
   }
+
+  async function sendMessage(content: string) {
+    const text = content.trim()
+    if (!text || chatLoading) return
+
+    const newMsg: ChatMessage = { role: 'user', content: text }
+    const updated = [...chatMessages, newMsg]
+    setChatMessages(updated)
+    setChatInput('')
+    setChatLoading(true)
+
+    try {
+      const res = await fetch('/api/chat-earl', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ messages: updated, vehicles }),
+      })
+
+      const data = await res.json()
+
+      if (res.ok) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.error ?? 'Something went wrong. Try again.' }])
+      }
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Connection error. Please try again.' }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
+
+  const primaryVehicle = vehicles[0]
+  const starterChips = [
+    primaryVehicle
+      ? `What brake pads does my ${[primaryVehicle.year, titleCase(primaryVehicle.brand), titleCase(primaryVehicle.name)].filter(Boolean).join(' ')} need?`
+      : 'What brake pads do I need?',
+    'I hear a noise when I brake',
+    "What's the difference between front and rear pads?",
+    'How often should I change my oil?',
+  ]
 
   if (loading) return null
 
@@ -314,6 +414,129 @@ export default function Profile() {
         </Link>
 
       </main>
+
+      {/* Earl chat backdrop */}
+      {chatOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40"
+          onClick={() => setChatOpen(false)}
+        />
+      )}
+
+      {/* Earl chat panel */}
+      {chatOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-50 max-w-md mx-auto flex flex-col bg-white rounded-t-3xl shadow-2xl" style={{ height: '70vh' }}>
+          {/* Panel header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-3">
+              <EarlAvatar />
+              <div>
+                <p className="font-bold text-slate-800 text-sm leading-tight">Earl</p>
+                <p className="text-xs text-slate-500">Auto parts specialist</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setChatOpen(false)}
+              className="w-8 h-8 flex items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 transition-colors"
+              aria-label="Close chat"
+            >
+              <XIcon />
+            </button>
+          </div>
+
+          {/* Messages area */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {chatMessages.length === 0 ? (
+              <>
+                <div className="flex gap-3">
+                  <EarlAvatar size="sm" />
+                  <div className="bg-slate-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-[80%]">
+                    <p className="text-sm text-slate-700">Hey, I&apos;m Earl. What can I help you with today?</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 ml-11">
+                  {starterChips.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => sendMessage(chip)}
+                      className="text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 text-slate-600 hover:border-brand-400 hover:text-brand-600 transition-colors text-left"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              chatMessages.map((msg, i) => (
+                <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'gap-3'}`}>
+                  {msg.role === 'assistant' && <EarlAvatar size="sm" />}
+                  <div className={`rounded-2xl px-4 py-3 max-w-[80%] text-sm leading-relaxed whitespace-pre-wrap ${
+                    msg.role === 'user'
+                      ? 'bg-brand-600 text-white rounded-tr-sm'
+                      : 'bg-slate-100 text-slate-700 rounded-tl-sm'
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))
+            )}
+
+            {/* Loading dots */}
+            {chatLoading && (
+              <div className="flex gap-3">
+                <EarlAvatar size="sm" />
+                <div className="bg-slate-100 rounded-2xl rounded-tl-sm px-4 py-3">
+                  <div className="flex gap-1 items-center h-5">
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input area */}
+          <div className="px-4 py-3 border-t border-slate-100 flex gap-2 shrink-0">
+            <input
+              ref={inputRef}
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  sendMessage(chatInput)
+                }
+              }}
+              placeholder="Ask Earl anything…"
+              className="flex-1 bg-slate-50 rounded-full px-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+            />
+            <button
+              onClick={() => sendMessage(chatInput)}
+              disabled={!chatInput.trim() || chatLoading}
+              className="w-10 h-10 bg-brand-600 hover:bg-brand-500 disabled:opacity-40 rounded-full flex items-center justify-center text-white transition-colors shrink-0 active:scale-95"
+              aria-label="Send"
+            >
+              <SendIcon />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Earl floating chat button */}
+      <button
+        onClick={() => { setChatOpen(true); setShowPulse(false) }}
+        className="fixed bottom-20 right-4 z-40 w-14 h-14 bg-brand-600 hover:bg-brand-500 text-white rounded-full shadow-lg shadow-brand-200 flex items-center justify-center transition-all active:scale-95"
+        aria-label="Chat with Earl"
+      >
+        {showPulse && (
+          <span className="absolute inset-0 rounded-full bg-brand-500 animate-ping opacity-50" />
+        )}
+        <ChatBubbleIcon />
+      </button>
 
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/80 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around py-4 px-6 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
         {[
