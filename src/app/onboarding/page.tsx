@@ -1,13 +1,27 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
+
+const CheckIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
 
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
+
   const [showInfo, setShowInfo] = useState(false)
+  const [showScanModal, setShowScanModal] = useState(false)
+  const [scanLoading, setScanLoading] = useState(false)
+  const [scanError, setScanError] = useState<string | null>(null)
+  const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
+
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const uploadInputRef = useRef<HTMLInputElement>(null)
 
   const [fullName, setFullName] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
@@ -24,6 +38,79 @@ export default function OnboardingPage() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  function clearScanned(field: string) {
+    setScannedFields(prev => new Set([...prev].filter(f => f !== field)))
+  }
+
+  function inputClass(field: string) {
+    return `w-full rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 border-none transition-colors ${
+      scannedFields.has(field)
+        ? 'bg-green-50 ring-2 ring-green-400 focus:ring-green-500'
+        : 'bg-slate-50 focus:ring-brand-500'
+    }`
+  }
+
+  async function handleScanFile(file: File) {
+    if (file.size > 4 * 1024 * 1024) {
+      setScanError('Image is too large. Please use an image under 4MB.')
+      return
+    }
+
+    setScanLoading(true)
+    setScanError(null)
+
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(file)
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = reject
+      })
+
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setScanError('You must be logged in to use this feature.')
+        setScanLoading(false)
+        return
+      }
+
+      const res = await fetch('/api/scan-plate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ image: base64, mimeType: file.type }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setScanError(data.error ?? 'Failed to scan plate.')
+        setScanLoading(false)
+        return
+      }
+
+      const filled = new Set<string>()
+      if (data.vin)        { setVin(data.vin);              filled.add('vin') }
+      if (data.year)       { setYear(String(data.year));    filled.add('year') }
+      if (data.brand)      { setBrand(data.brand);          filled.add('brand') }
+      if (data.name)       { setName(data.name);            filled.add('name') }
+      if (data.model_code) { setModelCode(data.model_code); filled.add('model_code') }
+      if (data.body)       { setBody(data.body);            filled.add('body') }
+      if (data.engine)     { setEngine(data.engine);        filled.add('engine') }
+      if (data.color_code) { setColorCode(data.color_code); filled.add('color_code') }
+      if (data.color_name) { setColorName(data.color_name); filled.add('color_name') }
+
+      setScannedFields(filled)
+      setShowScanModal(false)
+    } catch {
+      setScanError('Something went wrong. Please try again.')
+    } finally {
+      setScanLoading(false)
+    }
+  }
 
   async function handleSave() {
     setError(null)
@@ -93,6 +180,87 @@ export default function OnboardingPage() {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
+
+      {/* Hidden file inputs */}
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && handleScanFile(e.target.files[0])}
+      />
+      <input
+        ref={uploadInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && handleScanFile(e.target.files[0])}
+      />
+
+      {/* Scan modal */}
+      {showScanModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => { if (!scanLoading) setShowScanModal(false) }}
+          />
+          <div className="relative w-full max-w-md bg-white rounded-t-3xl pt-5 pb-10 shadow-2xl">
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+
+            <div className="px-5">
+              <h3 className="text-lg font-bold text-slate-800">Scan compliance plate</h3>
+              <p className="text-sm text-slate-500 mt-1 mb-6">Take a photo of your vehicle&apos;s compliance plate to auto-fill the form</p>
+
+              {scanError && (
+                <div className="mb-5 p-3 bg-red-50 border border-red-100 rounded-xl">
+                  <p className="text-sm text-red-600 font-medium">{scanError}</p>
+                </div>
+              )}
+
+              {scanLoading ? (
+                <div className="flex flex-col items-center py-8 gap-3">
+                  <div className="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin" />
+                  <p className="text-sm text-slate-500 font-medium">Reading plate…</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="flex flex-col items-center gap-3 py-6 bg-slate-50 rounded-2xl border-2 border-slate-100 hover:border-brand-300 hover:bg-brand-50 transition-colors active:scale-[0.97]"
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                      <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    <span className="text-sm font-semibold text-slate-700">Take photo</span>
+                  </button>
+                  <button
+                    onClick={() => uploadInputRef.current?.click()}
+                    className="flex flex-col items-center gap-3 py-6 bg-slate-50 rounded-2xl border-2 border-slate-100 hover:border-brand-300 hover:bg-brand-50 transition-colors active:scale-[0.97]"
+                  >
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-brand-600">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <span className="text-sm font-semibold text-slate-700">Choose photo</span>
+                  </button>
+                </div>
+              )}
+
+              {!scanLoading && (
+                <button
+                  onClick={() => setShowScanModal(false)}
+                  className="w-full mt-4 py-3 text-sm font-semibold text-slate-400 hover:text-slate-600 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Info modal */}
       {showInfo && (
@@ -189,7 +357,10 @@ export default function OnboardingPage() {
 
         <div className="flex gap-3 mt-4">
           <div className="flex items-center gap-1.5">
-            <button className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors active:scale-[0.97]">
+            <button
+              onClick={() => { setScanError(null); setShowScanModal(true) }}
+              className="flex items-center gap-2 border border-slate-200 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors active:scale-[0.97]"
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                 <circle cx="12" cy="13" r="4"/>
@@ -254,9 +425,12 @@ export default function OnboardingPage() {
                   type="text"
                   placeholder="e.g. JT2AE09W9J0123456"
                   value={vin}
-                  onChange={(e) => setVin(e.target.value)}
-                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  onChange={(e) => { setVin(e.target.value); clearScanned('vin') }}
+                  className={inputClass('vin')}
                 />
+                {scannedFields.has('vin') && (
+                  <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -266,9 +440,12 @@ export default function OnboardingPage() {
                     type="number"
                     placeholder="e.g. 2012"
                     value={year}
-                    onChange={(e) => setYear(e.target.value)}
-                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                    onChange={(e) => { setYear(e.target.value); clearScanned('year') }}
+                    className={inputClass('year')}
                   />
+                  {scannedFields.has('year') && (
+                    <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Brand</label>
@@ -276,9 +453,12 @@ export default function OnboardingPage() {
                     type="text"
                     placeholder="e.g. Toyota"
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                    onChange={(e) => { setBrand(e.target.value); clearScanned('brand') }}
+                    className={inputClass('brand')}
                   />
+                  {scannedFields.has('brand') && (
+                    <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                  )}
                 </div>
               </div>
 
@@ -288,9 +468,12 @@ export default function OnboardingPage() {
                   type="text"
                   placeholder="e.g. Corolla Axio"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  onChange={(e) => { setName(e.target.value); clearScanned('name') }}
+                  className={inputClass('name')}
                 />
+                {scannedFields.has('name') && (
+                  <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
               </div>
 
               <div>
@@ -299,9 +482,12 @@ export default function OnboardingPage() {
                   type="text"
                   placeholder="e.g. DBA-NZE144-AEXNK(nze144)"
                   value={modelCode}
-                  onChange={(e) => setModelCode(e.target.value)}
-                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  onChange={(e) => { setModelCode(e.target.value); clearScanned('model_code') }}
+                  className={inputClass('model_code')}
                 />
+                {scannedFields.has('model_code') && (
+                  <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
               </div>
 
               <div>
@@ -310,9 +496,12 @@ export default function OnboardingPage() {
                   type="text"
                   placeholder="e.g. Sedan"
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  onChange={(e) => { setBody(e.target.value); clearScanned('body') }}
+                  className={inputClass('body')}
                 />
+                {scannedFields.has('body') && (
+                  <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
               </div>
 
               <div>
@@ -321,9 +510,12 @@ export default function OnboardingPage() {
                   type="text"
                   placeholder="e.g. 1NZ-FE"
                   value={engine}
-                  onChange={(e) => setEngine(e.target.value)}
-                  className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                  onChange={(e) => { setEngine(e.target.value); clearScanned('engine') }}
+                  className={inputClass('engine')}
                 />
+                {scannedFields.has('engine') && (
+                  <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -333,9 +525,12 @@ export default function OnboardingPage() {
                     type="text"
                     placeholder="e.g. 040, ZHJ, 1F7"
                     value={colorCode}
-                    onChange={(e) => setColorCode(e.target.value)}
-                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                    onChange={(e) => { setColorCode(e.target.value); clearScanned('color_code') }}
+                    className={inputClass('color_code')}
                   />
+                  {scannedFields.has('color_code') && (
+                    <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Color</label>
@@ -343,9 +538,12 @@ export default function OnboardingPage() {
                     type="text"
                     placeholder="e.g. Super White"
                     value={colorName}
-                    onChange={(e) => setColorName(e.target.value)}
-                    className="w-full bg-slate-50 rounded-xl px-4 py-3 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500 border-none"
+                    onChange={(e) => { setColorName(e.target.value); clearScanned('color_name') }}
+                    className={inputClass('color_name')}
                   />
+                  {scannedFields.has('color_name') && (
+                    <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                  )}
                 </div>
               </div>
 
