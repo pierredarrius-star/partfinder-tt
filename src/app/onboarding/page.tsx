@@ -118,8 +118,8 @@ export default function OnboardingPage() {
       setError('Full name and WhatsApp number are required.')
       return
     }
-    if (!year.trim() || !brand.trim() || !name.trim() || !body.trim() || !engine.trim()) {
-      setError('Year, brand, name, body, and engine are required.')
+    if (!vin.trim() && !brand.trim() && !name.trim()) {
+      setError('Please add either a VIN or vehicle brand and name to save.')
       return
     }
 

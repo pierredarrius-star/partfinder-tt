@@ -22,26 +22,31 @@ export async function POST(request: Request) {
   console.log('[vehicles] received body:', body)
   const { year, vin, brand, name, model_code, body: bodyStyle, engine, color_code, color_name, nickname, frame_number } = body
 
-  if (!year || !brand || !name || !bodyStyle || !engine) {
-    return NextResponse.json({ error: 'Year, brand, name, body, and engine are required' }, { status: 400 })
+  if (!vin && !brand && !name) {
+    return NextResponse.json({ error: 'At least one of VIN, brand, or name is required' }, { status: 400 })
   }
+
+  const { count } = await serviceClient
+    .from('user_vehicles')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', user.id)
 
   const { data, error } = await serviceClient
     .from('user_vehicles')
     .insert({
       user_id: user.id,
-      year: parseInt(year, 10),
+      year: year ? parseInt(year, 10) : null,
       vin: vin || null,
-      brand,
-      name,
+      brand: brand || null,
+      name: name || null,
       model_code: model_code || null,
-      body: bodyStyle,
-      engine,
+      body: bodyStyle || null,
+      engine: engine || null,
       color_code: color_code || null,
       color_name: color_name || null,
       nickname: nickname || null,
       frame_number: frame_number || null,
-      is_primary: true,
+      is_primary: (count ?? 0) === 0,
     })
     .select()
     .single()
