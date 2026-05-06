@@ -147,6 +147,20 @@ export default function OnboardingPage() {
       return
     }
 
+    const payload = {
+      year,
+      vin: vin.trim().toUpperCase() || null,
+      brand: brand.trim().toLowerCase(),
+      name: name.trim().toLowerCase(),
+      model_code: modelCode.trim().toLowerCase() || null,
+      body: body.trim().toLowerCase(),
+      engine: engine.trim().toUpperCase(),
+      color_code: colorCode.trim() || null,
+      color_name: colorName.trim().toLowerCase() || null,
+      nickname: nickname.trim().toLowerCase() || null,
+    }
+    console.log('[onboarding] saving vehicle payload:', payload)
+
     const res = await fetch('/api/vehicles', {
       method: 'POST',
       headers: {

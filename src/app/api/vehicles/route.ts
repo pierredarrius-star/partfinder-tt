@@ -19,6 +19,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
+  console.log('[vehicles] received body:', body)
   const { year, vin, brand, name, model_code, body: bodyStyle, engine, color_code, color_name, nickname, frame_number } = body
 
   if (!year || !brand || !name || !bodyStyle || !engine) {

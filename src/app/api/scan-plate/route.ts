@@ -9,6 +9,33 @@ const serviceClient = createClient(
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
+const colorCodeMap: Record<string, Record<string, string>> = {
+  toyota: {
+    '040': 'Super White',
+    '070': 'White Pearl Crystal Shine',
+    '1F7': 'Silver Metallic',
+    '1G3': 'Magnetic Gray Metallic',
+    '202': 'Black',
+    '218': 'Attitude Black Mica',
+    '3R3': 'Barcelona Red Metallic',
+    '8T7': 'Blue Crush Metallic',
+    'ZHJ': 'White Pearl Crystal Shine',
+  },
+  nissan: {
+    'KH3': 'Super Black',
+    'QAB': 'Brilliant White Pearl',
+    'K23': 'Brilliant Silver',
+    'QX1': 'Pearl White',
+    'G41': 'Magnetic Black Pearl',
+  },
+  honda: {
+    'NH-731P': 'Crystal Black Pearl',
+    'NH-578': 'Taffeta White',
+    'NH-797M': 'Modern Steel Metallic',
+    'B-553P': 'Obsidian Blue Pearl',
+  },
+}
+
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
@@ -56,7 +83,7 @@ Fields to extract:
 - body: Body style in lowercase (e.g. "sedan", "hatchback", "suv", "wagon", "pickup")
 - engine: Engine displacement code (e.g. "1NZ-FE", "HR15DE", "K20A")
 - color_code: Paint color code if visible (e.g. "040", "1F7", "ZHJ")
-- color_name: string or null (the manufacturer's marketing name for the color code. Use your knowledge of vehicle paint codes — for example: Toyota ZHJ = "White Pearl Crystal Shine", Toyota 040 = "Super White", Toyota 1F7 = "Silver Metallic", Toyota 1G3 = "Magnetic Gray Metallic", Toyota 202 = "Black", Toyota 3R3 = "Barcelona Red Metallic", Toyota 8T7 = "Blue Crush Metallic", Nissan KH3 = "Super Black", Nissan QAB = "Brilliant White Pearl", Nissan K23 = "Brilliant Silver", Honda NH-731P = "Crystal Black Pearl", Honda NH-578 = "Taffeta White". If you recognize the code for the brand, return the marketing name. If unsure, return null rather than guessing.)
+- color_name: string or null (the manufacturer's marketing name for the color code. If you see a color code, you MUST attempt to return the marketing name. Only return null if you cannot identify the brand or have no knowledge of that specific code. Use your knowledge of vehicle paint codes — for example: Toyota ZHJ = "White Pearl Crystal Shine", Toyota 040 = "Super White", Toyota 1F7 = "Silver Metallic", Toyota 1G3 = "Magnetic Gray Metallic", Toyota 202 = "Black", Toyota 3R3 = "Barcelona Red Metallic", Toyota 8T7 = "Blue Crush Metallic", Nissan KH3 = "Super Black", Nissan QAB = "Brilliant White Pearl", Nissan K23 = "Brilliant Silver", Honda NH-731P = "Crystal Black Pearl", Honda NH-578 = "Taffeta White". For Toyota ZHJ specifically, always return "White Pearl Crystal Shine". If unsure, return null rather than guessing.)
 
 Return ONLY a valid JSON object with exactly these keys. Do not include any other text.
 Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla axio","model_code":"DBA-NZE144","body":"sedan","engine":"1NZ-FE","color_code":"040","color_name":"Super White"}`
@@ -76,6 +103,16 @@ Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla
         { error: 'Could not read the plate. Please try a clearer photo.' },
         { status: 422 }
       )
+    }
+
+    // Fallback: if Gemini didn't resolve color_name but we have brand + color_code, look it up locally
+    if (!parsed.color_name && parsed.color_code && parsed.brand) {
+      const brand = String(parsed.brand).toLowerCase()
+      const code = String(parsed.color_code)
+      const brandMap = colorCodeMap[brand]
+      if (brandMap) {
+        parsed.color_name = brandMap[code] ?? brandMap[code.toUpperCase()] ?? null
+      }
     }
 
     const hasAnyValue = Object.values(parsed).some(v => v !== null && v !== undefined && v !== '')

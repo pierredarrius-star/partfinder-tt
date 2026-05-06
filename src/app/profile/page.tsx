@@ -270,34 +270,33 @@ export default function Profile() {
             {(v.vin || v.model_code) && (
               <div className="mt-3 -mx-5 border-t border-slate-100">
                 <p className="px-5 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Parts catalogs</p>
-                <div className="grid grid-cols-3 divide-x divide-slate-100">
-                  <a
-                    href={v.vin ? `https://partsouq.com/en/search/all?q=${encodeURIComponent(v.vin)}` : '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                <div className="grid grid-cols-2 divide-x divide-slate-100">
+                  <button
+                    onClick={async () => {
+                      if (v.vin) { try { await navigator.clipboard.writeText(v.vin) } catch {} }
+                      window.open('https://partsouq.com/en/search/vin', '_blank', 'noopener,noreferrer')
+                    }}
                     className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
                   >
                     PartSouq
-                  </a>
-                  <a
-                    href={v.vin
-                      ? `https://www.amayama.com/en/genuineparts/search?q=${encodeURIComponent(v.vin)}`
-                      : `https://www.amayama.com/en/genuineparts/search?q=${encodeURIComponent(v.model_code!)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (v.vin) {
+                        try { await navigator.clipboard.writeText(v.vin) } catch {}
+                        window.open(`https://www.amayama.com/en/search/?q=${encodeURIComponent(v.vin)}`, '_blank', 'noopener,noreferrer')
+                      } else {
+                        window.open('https://www.amayama.com/en', '_blank', 'noopener,noreferrer')
+                      }
+                    }}
                     className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
                   >
                     Amayama
-                  </a>
-                  <a
-                    href={v.vin ? `https://www.megazip.net/search?q=${encodeURIComponent(v.vin)}` : '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
-                  >
-                    Megazip
-                  </a>
+                  </button>
                 </div>
+                {v.vin && (
+                  <p className="px-4 pb-3 text-xs text-slate-400 italic">VIN copied to clipboard — paste it into the catalog&apos;s search bar.</p>
+                )}
               </div>
             )}
           </div>
