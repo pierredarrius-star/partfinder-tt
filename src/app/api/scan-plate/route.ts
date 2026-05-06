@@ -45,6 +45,7 @@ export async function POST(request: Request) {
     const prompt = `You are analyzing a vehicle compliance plate, certification sticker, or VIN plate.
 Extract vehicle information visible in the image and return it as JSON.
 Return null for any field you cannot confidently read.
+Use the brand context to look up color codes — different manufacturers use different code systems.
 
 Fields to extract:
 - vin: Vehicle Identification Number (17 alphanumeric characters)
@@ -55,10 +56,10 @@ Fields to extract:
 - body: Body style in lowercase (e.g. "sedan", "hatchback", "suv", "wagon", "pickup")
 - engine: Engine displacement code (e.g. "1NZ-FE", "HR15DE", "K20A")
 - color_code: Paint color code if visible (e.g. "040", "1F7", "ZHJ")
-- color_name: Color description in lowercase (e.g. "super white", "silver metallic")
+- color_name: string or null (the manufacturer's marketing name for the color code. Use your knowledge of vehicle paint codes — for example: Toyota ZHJ = "White Pearl Crystal Shine", Toyota 040 = "Super White", Toyota 1F7 = "Silver Metallic", Toyota 1G3 = "Magnetic Gray Metallic", Toyota 202 = "Black", Toyota 3R3 = "Barcelona Red Metallic", Toyota 8T7 = "Blue Crush Metallic", Nissan KH3 = "Super Black", Nissan QAB = "Brilliant White Pearl", Nissan K23 = "Brilliant Silver", Honda NH-731P = "Crystal Black Pearl", Honda NH-578 = "Taffeta White". If you recognize the code for the brand, return the marketing name. If unsure, return null rather than guessing.)
 
 Return ONLY a valid JSON object with exactly these keys. Do not include any other text.
-Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla axio","model_code":"DBA-NZE144","body":"sedan","engine":"1NZ-FE","color_code":"040","color_name":"super white"}`
+Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla axio","model_code":"DBA-NZE144","body":"sedan","engine":"1NZ-FE","color_code":"040","color_name":"Super White"}`
 
     const result = await model.generateContent([
       { inlineData: { mimeType, data: image } },

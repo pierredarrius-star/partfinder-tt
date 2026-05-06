@@ -266,6 +266,40 @@ export default function Profile() {
                 Edit vehicle
               </Link>
             </div>
+
+            {(v.vin || v.model_code) && (
+              <div className="mt-3 -mx-5 border-t border-slate-100">
+                <p className="px-5 pt-3 pb-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Parts catalogs</p>
+                <div className="grid grid-cols-3 divide-x divide-slate-100">
+                  <a
+                    href={v.vin ? `https://partsouq.com/en/search/all?q=${encodeURIComponent(v.vin)}` : '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
+                  >
+                    PartSouq
+                  </a>
+                  <a
+                    href={v.vin
+                      ? `https://www.amayama.com/en/genuineparts/search?q=${encodeURIComponent(v.vin)}`
+                      : `https://www.amayama.com/en/genuineparts/search?q=${encodeURIComponent(v.model_code!)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Amayama
+                  </a>
+                  <a
+                    href={v.vin ? `https://www.megazip.net/search?q=${encodeURIComponent(v.vin)}` : '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-3 text-center text-xs font-semibold text-blue-600 hover:bg-slate-50 transition-colors"
+                  >
+                    Megazip
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
         ))}
 
