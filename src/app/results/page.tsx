@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import SupplierBlastLoader from "@/components/SupplierBlastLoader";
 
@@ -14,6 +14,7 @@ function ResultsContent() {
   const [inquiryData, setInquiryData] = useState<any>(null);
   const [responses, setResponses] = useState<any[]>([]);
   const [totalContacted, setTotalContacted] = useState(0);
+  const pollIdRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!inquiryId) return;
@@ -79,6 +80,11 @@ function ResultsContent() {
         },
         async (payload) => {
           console.log('Realtime change received!', payload);
+          // Cancel polling fallback once realtime proves itself working
+          if (pollIdRef.current) {
+            clearInterval(pollIdRef.current);
+            pollIdRef.current = null;
+          }
           const [{ data: newResp }, { count }] = await Promise.all([
             supabase
               .from('supplier_responses')
@@ -100,12 +106,12 @@ function ResultsContent() {
       )
       .subscribe();
 
-    // 4. Polling fallback — catches replies if the realtime event is missed
-    const pollId = setInterval(fetchResponses, 3000);
+    // 4. Polling fallback — catches replies if realtime is missed; cancelled on first realtime event
+    pollIdRef.current = setInterval(fetchResponses, 8000);
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(pollId);
+      if (pollIdRef.current) clearInterval(pollIdRef.current);
     };
   }, [inquiryId]);
 

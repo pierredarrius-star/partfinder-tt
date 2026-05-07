@@ -187,8 +187,8 @@ export default function Profile() {
     if (!text || chatLoading) return
 
     const newMsg: ChatMessage = { role: 'user', content: text }
-    const updated = [...chatMessages, newMsg]
-    setChatMessages(updated)
+    const snapshot = [...chatMessages, newMsg]
+    setChatMessages(prev => [...prev, newMsg])
     setChatInput('')
     setChatLoading(true)
 
@@ -199,7 +199,7 @@ export default function Profile() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ messages: updated, vehicles }),
+        body: JSON.stringify({ messages: snapshot, vehicles }),
       })
 
       const data = await res.json()

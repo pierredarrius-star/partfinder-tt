@@ -167,18 +167,7 @@ export default function OnboardingPage() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({
-        year,
-        vin: vin.trim().toUpperCase() || null,
-        brand: brand.trim().toLowerCase(),
-        name: name.trim().toLowerCase(),
-        model_code: modelCode.trim().toLowerCase() || null,
-        body: body.trim().toLowerCase(),
-        engine: engine.trim().toUpperCase(),
-        color_code: colorCode.trim() || null,
-        color_name: colorName.trim().toLowerCase() || null,
-        nickname: nickname.trim().toLowerCase() || null,
-      }),
+      body: JSON.stringify(payload),
     })
 
     setLoading(false)
