@@ -55,12 +55,12 @@ Fields to extract:
 - name: Model name in lowercase (e.g. "corolla", "tiida", "civic")
 - model_code: Full model/grade code if visible (e.g. "DBA-NZE141", "B15")
 - body: Body style in lowercase (e.g. "sedan", "hatchback", "suv", "wagon", "pickup")
-- engine: Engine displacement code (e.g. "1NZ-FE", "HR15DE", "K20A")
+- engine: The engine number/string exactly as printed on the plate (after "ENGINE NO." or equivalent), preserving original spacing and punctuation. If the printed string contains BOTH the engine family code AND additional serial characters, append the family code in parentheses. If the printed string IS only the family code with no extra serial, return it as-is with no parentheses. Examples: plate shows "M15DNE09468" → return "M15DNE09468 (M15D)"; plate shows "1NZ-FE 1234567" → return "1NZ-FE 1234567 (1NZ-FE)"; plate shows "1NZ-FE" → return "1NZ-FE"; plate shows "K20A" → return "K20A". Use your knowledge of JDM engine family codes to identify which portion is the family.
 - color_code: Paint color code if visible (e.g. "040", "1F7", "ZHJ")
 - color_name: The manufacturer's marketing name for the color code if you recognize it. Only return null if you don't know — we have a fallback database.
 
 Return ONLY a valid JSON object with exactly these keys. Do not include any other text.
-Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla axio","model_code":"DBA-NZE144","body":"sedan","engine":"1NZ-FE","color_code":"040","color_name":"Super White"}`
+Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla axio","model_code":"DBA-NZE144","body":"sedan","engine":"1NZ-FE 1234567 (1NZ-FE)","color_code":"040","color_name":"Super White"}`
 
     const result = await model.generateContent([
       { inlineData: { mimeType, data: image } },
@@ -79,10 +79,15 @@ Example: {"vin":"JT2AE09W9J0123456","year":2012,"brand":"toyota","name":"corolla
       )
     }
 
-    // Fallback: if Gemini didn't resolve color_name, look it up from the hardcoded database
-    if (!parsed.color_name && parsed.brand && parsed.color_code) {
+    // DB wins: if we have a curated entry for this brand+code, use it
+    // and override whatever Gemini guessed. Only trust Gemini's
+    // color_name when the code isn't in our database.
+    if (parsed.brand && parsed.color_code) {
       const lookedUp = lookupColorName(parsed.brand as string, parsed.color_code as string)
-      if (lookedUp) parsed.color_name = lookedUp
+      if (lookedUp) {
+        parsed.color_name = lookedUp  // DB wins
+      }
+      // else: leave parsed.color_name as whatever Gemini returned (could be a real guess or null)
     }
 
     const hasAnyValue = Object.values(parsed).some(v => v !== null && v !== undefined && v !== '')
