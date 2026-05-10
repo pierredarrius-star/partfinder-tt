@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-// Using service role for now since chassis_lookup doesn't exist yet and has no RLS.
-// Revisit: switch to anon client + RLS policies once the table is created.
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Module-level cache keyed by VIN — lives for the serverless instance lifetime
-const nhtsaCache = new Map<string, DecodeResult>()
+const nhtsaCache = new Map<string, NhtsaDecodeResult>()
 
 type VehicleResult = {
   vin: string | null
@@ -19,15 +16,21 @@ type VehicleResult = {
   model_code: string | null
   body: string | null
   engine: string | null
+  year_start?: number | null
+  year_end?: number | null
+  drivetrain?: string | null
 }
 
-type DecodeResult = {
-  source: 'nhtsa' | 'chassis_lookup' | null
-  vehicle: VehicleResult | null
+type NhtsaDecodeResult = {
+  source: 'nhtsa'
+  vehicle: VehicleResult
   raw: unknown
 }
 
-function mapNhtsa(r: Record<string, string>, vin: string): DecodeResult {
+const VIN_RE = /^[A-HJ-NPR-Z0-9]{17}$/
+const CHASSIS_RE = /^[A-Z0-9]{2,8}-[0-9]{5,8}$/
+
+function mapNhtsa(r: Record<string, string>, vin: string): NhtsaDecodeResult {
   const year = parseInt(r.ModelYear, 10)
   const brand = r.Make?.toLowerCase().trim() || null
   const name = r.Model?.toLowerCase().trim() || null
@@ -56,14 +59,19 @@ function mapNhtsa(r: Record<string, string>, vin: string): DecodeResult {
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
-    const input = String(body.input ?? '').toUpperCase().trim()
+
+    if (body.input === undefined || body.input === null || typeof body.input !== 'string') {
+      return NextResponse.json({ error: 'input is required and must be a string' }, { status: 400 })
+    }
+
+    const input = body.input.replace(/\s+/g, '').toUpperCase()
 
     if (!input) {
-      return NextResponse.json({ source: null, vehicle: null, raw: { error: 'Empty input' } })
+      return NextResponse.json({ error: 'input is required and must be a string' }, { status: 400 })
     }
 
     // ── 17-char VIN → NHTSA ──────────────────────────────────────────────
-    if (input.length === 17) {
+    if (VIN_RE.test(input)) {
       if (nhtsaCache.has(input)) {
         return NextResponse.json(nhtsaCache.get(input))
       }
@@ -76,8 +84,6 @@ export async function POST(request: Request) {
         const result: Record<string, string> = data?.Results?.[0] ?? {}
 
         const out = mapNhtsa(result, input)
-        // Only consider it a successful decode if NHTSA returned a brand.
-        // Empty Make means VIN was syntactically valid but unrecognized.
         if (!out.vehicle?.brand) {
           return NextResponse.json({ source: null, vehicle: null, raw: data })
         }
@@ -89,46 +95,47 @@ export async function POST(request: Request) {
       }
     }
 
-    // ── Non-17-char → chassis_lookup table ───────────────────────────────
-    const prefix = input.slice(0, 5)
-    try {
+    // ── JDM chassis (PREFIX-SERIAL) → chassis_codes table ────────────────
+    if (CHASSIS_RE.test(input)) {
+      const prefix = input.split('-')[0]
       const { data, error } = await serviceClient
-        .from('chassis_lookup')
+        .from('chassis_codes')
         .select('*')
-        .eq('chassis_prefix', prefix)
+        .eq('prefix', prefix)
         .maybeSingle()
 
       if (error || !data) {
         return NextResponse.json({
-          source: null,
+          source: 'none',
           vehicle: null,
-          raw: { error: error?.message ?? 'No chassis match' },
+          error: 'Chassis prefix not in database',
         })
       }
 
       return NextResponse.json({
-        source: 'chassis_lookup' as const,
+        source: 'chassis_db',
         vehicle: {
-          vin: null,
-          year: data.year ?? null,
-          brand: typeof data.brand === 'string' ? data.brand.toLowerCase() : null,
-          name: typeof data.name === 'string' ? data.name.toLowerCase() : null,
-          model_code: data.model_code ?? null,
-          body: typeof data.body === 'string' ? data.body.toLowerCase() : null,
+          brand: data.brand,
+          name: data.name,
           engine: data.engine ?? null,
+          body: data.body ?? null,
+          year_start: data.year_start ?? null,
+          year_end: data.year_end ?? null,
+          drivetrain: data.drivetrain ?? null,
+          model_code: data.prefix,
+          vin: null,
+          year: null,
         },
-        raw: data,
-      })
-    } catch {
-      // Table doesn't exist yet — fail gracefully
-      return NextResponse.json({
-        source: null,
-        vehicle: null,
-        raw: { error: 'chassis_lookup table not found or query failed' },
       })
     }
+
+    // ── Unrecognized format ───────────────────────────────────────────────
+    return NextResponse.json({
+      source: 'none',
+      vehicle: null,
+      error: 'Format not recognized. Provide a 17-character VIN or a JDM chassis number with dash (e.g., NZE141-1234567).',
+    })
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Unknown error'
-    return NextResponse.json({ source: null, vehicle: null, raw: { error: msg } })
+    return NextResponse.json({ error: 'decode failed' }, { status: 500 })
   }
 }
