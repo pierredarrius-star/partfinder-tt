@@ -50,6 +50,7 @@ matches.txt
 
 # local claude session memory
 .claude/
+CLAUDE.md
 
 # waha / whatsapp session artifacts
 qr.png
