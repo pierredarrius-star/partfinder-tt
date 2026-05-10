@@ -10,6 +10,30 @@ const CheckIcon = () => (
   </svg>
 )
 
+type DecodeVehicle = {
+  vin?: string | null
+  year?: number | null
+  brand?: string | null
+  name?: string | null
+  model_code?: string | null
+  body?: string | null
+  engine?: string | null
+  year_start?: number | null
+  year_end?: number | null
+  drivetrain?: string | null
+}
+
+type DecodeResponse = {
+  source: 'nhtsa' | 'chassis_db' | 'none'
+  vehicle: DecodeVehicle | null
+  error?: string
+}
+
+function cap(s: string | null | undefined): string {
+  if (!s) return ''
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
 export default function OnboardingPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
@@ -39,6 +63,15 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // VIN / chassis decoder state
+  const [decodeStatus, setDecodeStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
+  const [decodeResult, setDecodeResult] = useState<DecodeResponse | null>(null)
+  const [decodeError, setDecodeError] = useState<string | null>(null)
+  const [lastDecodedInput, setLastDecodedInput] = useState('')
+  const [decodeApplied, setDecodeApplied] = useState(false)
+  // mousedown fires before blur — used to suppress blur auto-decode when user clicks Decode button
+  const decodeMouseDownRef = useRef(false)
+
   function clearScanned(field: string) {
     setScannedFields(prev => new Set([...prev].filter(f => f !== field)))
   }
@@ -49,6 +82,76 @@ export default function OnboardingPage() {
         ? 'bg-green-50 ring-2 ring-green-400 focus:ring-green-500'
         : 'bg-slate-50 focus:ring-brand-500'
     }`
+  }
+
+  async function handleDecode() {
+    const trimmed = vin.trim()
+    if (trimmed.length < 9) return
+
+    setDecodeStatus('loading')
+    setDecodeError(null)
+    setDecodeResult(null)
+    setDecodeApplied(false)
+    setLastDecodedInput(trimmed)
+
+    try {
+      const res = await fetch('/api/decode-vin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: trimmed }),
+      })
+      const data: DecodeResponse = await res.json()
+
+      if (data.source === 'none' || !data.vehicle) {
+        setDecodeStatus('error')
+        if (data.error?.includes('Chassis prefix not in database')) {
+          setDecodeError("We don't recognize this chassis prefix yet. Please fill the fields manually or use the compliance plate scanner.")
+        } else {
+          setDecodeError(data.error ?? 'Could not decode this input.')
+        }
+      } else {
+        setDecodeResult(data)
+        setDecodeStatus('success')
+      }
+    } catch {
+      setDecodeStatus('error')
+      setDecodeError("Couldn't reach decoder. Check your connection and try again.")
+    }
+  }
+
+  function handleVinBlur() {
+    if (decodeMouseDownRef.current) {
+      decodeMouseDownRef.current = false
+      return
+    }
+    const trimmed = vin.trim()
+    if (trimmed.length >= 9 && trimmed !== lastDecodedInput) {
+      handleDecode()
+    }
+  }
+
+  function handleApply() {
+    if (!decodeResult?.vehicle) return
+    const v = decodeResult.vehicle
+
+    if (decodeResult.source === 'nhtsa') {
+      if (v.year && !year) setYear(String(v.year))
+      if (v.brand && !brand) setBrand(v.brand)
+      if (v.name && !name) setName(v.name)
+      if (v.body && !body) setBody(v.body)
+      if (v.engine && !engine) setEngine(v.engine)
+    } else if (decodeResult.source === 'chassis_db') {
+      if (v.brand && !brand) setBrand(v.brand)
+      if (v.name && !name) setName(v.name)
+      if (v.engine && !engine) setEngine(v.engine)
+      if (v.body && !body) setBody(v.body)
+      if (v.model_code && !modelCode) setModelCode(v.model_code)
+      // year intentionally skipped — chassis decode gives a range, user picks exact year
+    }
+
+    setDecodeStatus('idle')
+    setDecodeResult(null)
+    setDecodeApplied(true)
   }
 
   async function handleScanFile(file: File) {
@@ -422,17 +525,135 @@ export default function OnboardingPage() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Vehicle Details</p>
 
             <div className="space-y-4">
+
+              {/* VIN / Chassis field with decoder */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="e.g. JT2AE09W9J0123456"
-                  value={vin}
-                  onChange={(e) => { setVin(e.target.value); clearScanned('vin') }}
-                  className={inputClass('vin')}
-                />
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN / Chassis Number (Optional)</label>
+                <div className="flex gap-2 items-stretch">
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      placeholder="e.g. JT2AE09W9J0123456 or NZE141-1234567"
+                      value={vin}
+                      onChange={(e) => {
+                        setVin(e.target.value)
+                        clearScanned('vin')
+                        setDecodeStatus('idle')
+                        setDecodeResult(null)
+                        setDecodeError(null)
+                        setDecodeApplied(false)
+                      }}
+                      onBlur={handleVinBlur}
+                      className={inputClass('vin')}
+                    />
+                  </div>
+                  <button
+                    onMouseDown={() => { decodeMouseDownRef.current = true }}
+                    onClick={handleDecode}
+                    disabled={vin.trim().length < 9 || decodeStatus === 'loading'}
+                    className="flex-shrink-0 px-4 py-3 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] flex items-center gap-1.5"
+                  >
+                    {decodeStatus === 'loading' ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Decoding…</span>
+                      </>
+                    ) : 'Decode'}
+                  </button>
+                </div>
+
                 {scannedFields.has('vin') && (
                   <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
+                )}
+
+                {/* Decoder error */}
+                {decodeStatus === 'error' && decodeError && (
+                  <p className="mt-2 text-xs text-red-500 font-medium">{decodeError}</p>
+                )}
+
+                {/* Applied confirmation */}
+                {decodeApplied && (
+                  <p className="mt-2 text-xs text-green-600 font-semibold flex items-center gap-1">
+                    <CheckIcon /> Vehicle details filled — review and complete the rest
+                  </p>
+                )}
+
+                {/* Decode preview card */}
+                {decodeStatus === 'success' && decodeResult?.vehicle && (
+                  <div className="mt-3 bg-blue-50 border border-blue-100 rounded-2xl p-4">
+                    <p className="text-sm font-bold text-slate-700 mb-3">
+                      {decodeResult.source === 'chassis_db' ? 'We found this vehicle (JDM chassis)' : 'We found this vehicle'}
+                    </p>
+
+                    <div className="space-y-1.5 text-sm">
+                      {decodeResult.source === 'nhtsa' && decodeResult.vehicle.year && (
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 w-20 flex-shrink-0">Year</span>
+                          <span className="text-slate-800 font-medium">{decodeResult.vehicle.year}</span>
+                        </div>
+                      )}
+                      {decodeResult.vehicle.brand && (
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 w-20 flex-shrink-0">Brand</span>
+                          <span className="text-slate-800 font-medium">{cap(decodeResult.vehicle.brand)}</span>
+                        </div>
+                      )}
+                      {decodeResult.vehicle.name && (
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 w-20 flex-shrink-0">Name</span>
+                          <span className="text-slate-800 font-medium">{cap(decodeResult.vehicle.name)}</span>
+                        </div>
+                      )}
+                      {decodeResult.vehicle.body && (
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 w-20 flex-shrink-0">Body</span>
+                          <span className="text-slate-800 font-medium">{cap(decodeResult.vehicle.body)}</span>
+                        </div>
+                      )}
+                      {decodeResult.vehicle.engine && (
+                        <div className="flex gap-2">
+                          <span className="text-slate-500 w-20 flex-shrink-0">Engine</span>
+                          <span className="text-slate-800 font-medium">{decodeResult.vehicle.engine}</span>
+                        </div>
+                      )}
+                      {decodeResult.source === 'chassis_db' && (
+                        <>
+                          {decodeResult.vehicle.drivetrain && (
+                            <div className="flex gap-2">
+                              <span className="text-slate-500 w-20 flex-shrink-0">Drive</span>
+                              <span className="text-slate-800 font-medium">{decodeResult.vehicle.drivetrain}</span>
+                            </div>
+                          )}
+                          {decodeResult.vehicle.model_code && (
+                            <div className="flex gap-2">
+                              <span className="text-slate-500 w-20 flex-shrink-0">Chassis</span>
+                              <span className="text-slate-800 font-medium">{decodeResult.vehicle.model_code}</span>
+                            </div>
+                          )}
+                          {decodeResult.vehicle.year_start && (
+                            <p className="text-xs text-slate-400 mt-2">
+                              Year range: {decodeResult.vehicle.year_start}–{decodeResult.vehicle.year_end} — please confirm exact year
+                            </p>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 mt-4">
+                      <button
+                        onClick={handleApply}
+                        className="flex-1 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold py-2.5 rounded-xl transition-colors active:scale-[0.97]"
+                      >
+                        Apply to form
+                      </button>
+                      <button
+                        onClick={() => { setDecodeStatus('idle'); setDecodeResult(null) }}
+                        className="flex-1 border border-slate-200 text-slate-600 text-sm font-semibold py-2.5 rounded-xl hover:bg-slate-50 transition-colors active:scale-[0.97]"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
 
