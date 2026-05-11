@@ -85,7 +85,8 @@ export async function POST(request: Request) {
 
         const out = mapNhtsa(result, input)
         if (!out.vehicle?.brand) {
-          return NextResponse.json({ source: null, vehicle: null, raw: data })
+          serviceClient.from('decode_misses').insert({ input, format_detected: 'vin', reason: 'jdm_or_unsupported_vin' }).then(() => {}).catch(() => {})
+          return NextResponse.json({ source: 'none', vehicle: null, error: 'jdm_or_unsupported_vin', raw: data })
         }
         nhtsaCache.set(input, out)
         return NextResponse.json(out)
@@ -105,10 +106,11 @@ export async function POST(request: Request) {
         .maybeSingle()
 
       if (error || !data) {
+        serviceClient.from('decode_misses').insert({ input, format_detected: 'chassis', reason: 'chassis_prefix_missing' }).then(() => {}).catch(() => {})
         return NextResponse.json({
           source: 'none',
           vehicle: null,
-          error: 'Chassis prefix not in database',
+          error: 'chassis_prefix_missing',
         })
       }
 
@@ -130,10 +132,12 @@ export async function POST(request: Request) {
     }
 
     // ── Unrecognized format ───────────────────────────────────────────────
+    serviceClient.from('decode_misses').insert({ input, format_detected: 'unknown', reason: 'format_invalid' }).then(() => {}).catch(() => {})
     return NextResponse.json({
       source: 'none',
       vehicle: null,
-      error: 'Format not recognized. Provide a 17-character VIN or a JDM chassis number with dash (e.g., NZE141-1234567).',
+      error: 'format_invalid',
+      message: 'Format not recognized. Provide a 17-character VIN or a JDM chassis number with dash (e.g., NZE141-1234567).',
     })
   } catch (err: unknown) {
     return NextResponse.json({ error: 'decode failed' }, { status: 500 })

@@ -24,9 +24,10 @@ type DecodeVehicle = {
 }
 
 type DecodeResponse = {
-  source: 'nhtsa' | 'chassis_db' | 'none'
+  source: 'nhtsa' | 'chassis_db' | 'none' | null
   vehicle: DecodeVehicle | null
   error?: string
+  message?: string
 }
 
 function cap(s: string | null | undefined): string {
@@ -100,18 +101,29 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input: trimmed }),
       })
+
+      if (!res.ok) {
+        setDecodeStatus('error')
+        setDecodeError("Couldn't reach decoder. Check your connection and try again.")
+        return
+      }
+
       const data: DecodeResponse = await res.json()
 
-      if (data.source === 'none' || !data.vehicle) {
-        setDecodeStatus('error')
-        if (data.error?.includes('Chassis prefix not in database')) {
-          setDecodeError("We don't recognize this chassis prefix yet. Please fill the fields manually or use the compliance plate scanner.")
-        } else {
-          setDecodeError(data.error ?? 'Could not decode this input.')
-        }
-      } else {
+      if (data.source === 'nhtsa' || data.source === 'chassis_db') {
         setDecodeResult(data)
         setDecodeStatus('success')
+      } else {
+        setDecodeStatus('error')
+        if (data.error === 'jdm_or_unsupported_vin') {
+          setDecodeError("This looks like a valid VIN, but our decoder doesn't cover this vehicle yet — common for JDM-only imports. Try your chassis number with a dash (e.g. NZE141-1234567), or fill the fields manually below.")
+        } else if (data.error === 'chassis_prefix_missing') {
+          setDecodeError("We don't recognize this chassis prefix yet. We're adding more codes as users hit them — please fill the fields manually for now, or use the compliance plate scanner.")
+        } else if (data.error === 'format_invalid') {
+          setDecodeError(data.message ?? 'Format not recognized. Provide a 17-character VIN or a JDM chassis number with dash (e.g., NZE141-1234567).')
+        } else {
+          setDecodeError("Couldn't decode this input. Please fill the fields manually.")
+        }
       }
     } catch {
       setDecodeStatus('error')
