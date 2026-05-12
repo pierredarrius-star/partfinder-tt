@@ -116,9 +116,9 @@ export default function OnboardingPage() {
       } else {
         setDecodeStatus('error')
         if (data.error === 'jdm_or_unsupported_vin') {
-          setDecodeError("This looks like a valid VIN, but our decoder doesn't cover this vehicle yet — common for JDM-only imports. Try your chassis number with a dash (e.g. NZE141-1234567), or fill the fields manually below.")
+          setDecodeError("This looks like a valid VIN, but our decoder doesn't cover this vehicle yet — common for JDM-only imports. Try your chassis number with a dash (e.g. NZE141-1234567), use Scan Plate at the top of this page, or fill the fields manually.")
         } else if (data.error === 'chassis_prefix_missing') {
-          setDecodeError("We don't recognize this chassis prefix yet. We're adding more codes as users hit them — please fill the fields manually for now, or use the compliance plate scanner.")
+          setDecodeError("We don't recognize this chassis prefix yet. We're adding more codes as users hit them — please fill the fields manually, or scroll up to use Scan Plate.")
         } else if (data.error === 'format_invalid') {
           setDecodeError(data.message ?? 'Format not recognized. Provide a 17-character VIN or a JDM chassis number with dash (e.g., NZE141-1234567).')
         } else {
@@ -556,14 +556,14 @@ export default function OnboardingPage() {
                         setDecodeApplied(false)
                       }}
                       onBlur={handleVinBlur}
-                      className={inputClass('vin')}
+                      className={`${inputClass('vin')} tracking-tight`}
                     />
                   </div>
                   <button
                     onMouseDown={() => { decodeMouseDownRef.current = true }}
                     onClick={handleDecode}
                     disabled={vin.trim().length < 9 || decodeStatus === 'loading'}
-                    className="flex-shrink-0 px-4 py-3 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] flex items-center gap-1.5"
+                    className="flex-shrink-0 px-3 py-3 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] flex items-center gap-1.5"
                   >
                     {decodeStatus === 'loading' ? (
                       <>

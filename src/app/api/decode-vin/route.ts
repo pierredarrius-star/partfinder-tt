@@ -85,7 +85,7 @@ export async function POST(request: Request) {
 
         const out = mapNhtsa(result, input)
         if (!out.vehicle?.brand) {
-          serviceClient.from('decode_misses').insert({ input, format_detected: 'vin', reason: 'jdm_or_unsupported_vin' }).then(() => {}, () => {})
+          try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'vin', reason: 'jdm_or_unsupported_vin' }) } catch { /* best-effort */ }
           return NextResponse.json({ source: 'none', vehicle: null, error: 'jdm_or_unsupported_vin', raw: data })
         }
         nhtsaCache.set(input, out)
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
         .maybeSingle()
 
       if (error || !data) {
-        serviceClient.from('decode_misses').insert({ input, format_detected: 'chassis', reason: 'chassis_prefix_missing' }).then(() => {}, () => {})
+        try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'chassis', reason: 'chassis_prefix_missing' }) } catch { /* best-effort */ }
         return NextResponse.json({
           source: 'none',
           vehicle: null,
@@ -132,7 +132,7 @@ export async function POST(request: Request) {
     }
 
     // ── Unrecognized format ───────────────────────────────────────────────
-    serviceClient.from('decode_misses').insert({ input, format_detected: 'unknown', reason: 'format_invalid' }).then(() => {}, () => {})
+    try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'unknown', reason: 'format_invalid' }) } catch { /* best-effort */ }
     return NextResponse.json({
       source: 'none',
       vehicle: null,
