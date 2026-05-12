@@ -556,7 +556,7 @@ export default function OnboardingPage() {
                         setDecodeApplied(false)
                       }}
                       onBlur={handleVinBlur}
-                      className={`${inputClass('vin')} tracking-tight`}
+                      className={`${inputClass('vin')} tracking-tight [-webkit-overflow-scrolling:touch]`}
                     />
                   </div>
                   <button
