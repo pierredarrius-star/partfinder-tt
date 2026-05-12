@@ -541,7 +541,7 @@ export default function OnboardingPage() {
               {/* VIN / Chassis field with decoder */}
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN / Chassis Number (Optional)</label>
-                <div className="flex gap-2 items-stretch">
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch">
                   <div className="flex-1 min-w-0">
                     <input
                       type="text"
@@ -556,14 +556,14 @@ export default function OnboardingPage() {
                         setDecodeApplied(false)
                       }}
                       onBlur={handleVinBlur}
-                      className={`${inputClass('vin')} tracking-tight [-webkit-overflow-scrolling:touch]`}
+                      className={`${inputClass('vin')} tracking-tight`}
                     />
                   </div>
                   <button
                     onMouseDown={() => { decodeMouseDownRef.current = true }}
                     onClick={handleDecode}
                     disabled={vin.trim().length < 9 || decodeStatus === 'loading'}
-                    className="flex-shrink-0 px-3 py-3 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] flex items-center gap-1.5"
+                    className="w-full sm:w-auto flex-shrink-0 px-3 py-3 bg-brand-600 hover:bg-brand-500 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] flex items-center justify-center gap-1.5"
                   >
                     {decodeStatus === 'loading' ? (
                       <>
