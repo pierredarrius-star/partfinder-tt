@@ -55,3 +55,6 @@ CLAUDE.md
 # waha / whatsapp session artifacts
 qr.png
 session.json
+
+# capacitor — native android project (generated, not tracked)
+/android/
