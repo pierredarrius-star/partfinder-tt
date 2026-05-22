@@ -28,7 +28,7 @@ export default function Home() {
       const data = await response.json();
 
       if (data.success) {
-        router.push(`/results?id=${data.inquiryId}`);
+        router.push(`/results?id=${data.inquiryId}&q=${encodeURIComponent(partName)}`);
       } else {
         alert("Failed to start search: " + data.error);
         setIsLoading(false);
