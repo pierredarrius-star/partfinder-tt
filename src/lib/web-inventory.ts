@@ -36,10 +36,20 @@ export interface ProductExtract {
 // in Next.js serverless functions.
 
 function getServiceClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('[web-inventory] Missing Supabase service-role env vars');
+  return createClient(url, key);
+}
+
+// ─── Safe URL helper ──────────────────────────────────────────────────────────
+
+function safeUrl(raw: string | undefined, fallback = 'https://unknown.com'): URL {
+  try {
+    return new URL(raw ?? fallback);
+  } catch {
+    return new URL(fallback);
+  }
 }
 
 // ─── searchWebInventory ───────────────────────────────────────────────────────
@@ -64,17 +74,33 @@ export async function searchWebInventory(query: string): Promise<WebResult[]> {
     return [];
   }
 
-  return (data ?? []).map((row: any) => ({
-    id: row.id,
-    part_name: row.part_name,
-    description: row.description,
-    price: row.price,
-    currency: row.currency,
-    product_url: row.product_url,
-    image_url: row.image_url,
-    site_name: row.supplier_sites.name,
-    site_url: row.supplier_sites.url,
-  }));
+  type InventoryRow = {
+    id: string;
+    part_name: string;
+    description: string | null;
+    price: number | null;
+    currency: string;
+    product_url: string;
+    image_url: string | null;
+    supplier_sites: { name: string; url: string } | { name: string; url: string }[];
+  };
+
+  return (data ?? []).map((row: InventoryRow) => {
+    const site = Array.isArray(row.supplier_sites)
+      ? row.supplier_sites[0]
+      : row.supplier_sites;
+    return {
+      id: row.id,
+      part_name: row.part_name,
+      description: row.description,
+      price: row.price,
+      currency: row.currency,
+      product_url: row.product_url,
+      image_url: row.image_url,
+      site_name: site?.name ?? '',
+      site_url: site?.url ?? '',
+    };
+  });
 }
 
 // ─── getActiveSites ───────────────────────────────────────────────────────────
@@ -134,21 +160,21 @@ export async function liveScrapeFallback(query: string): Promise<WebResult[]> {
     const json = await res.json();
     const results = json.data ?? json.results ?? [];
 
-    return results.map((r: any) => ({
-      id: r.url ?? r.metadata?.sourceURL ?? '',
-      part_name: r.title ?? r.metadata?.title ?? 'Unknown part',
-      description: r.description ?? r.metadata?.description ?? null,
-      price: null,
-      currency: 'TTD',
-      product_url: r.url ?? r.metadata?.sourceURL ?? '',
-      image_url: null,
-      site_name: new URL(
-        r.url ?? r.metadata?.sourceURL ?? 'https://unknown.com'
-      ).hostname.replace('www.', ''),
-      site_url: new URL(
-        r.url ?? r.metadata?.sourceURL ?? 'https://unknown.com'
-      ).origin,
-    }));
+    return results.map((r: any) => {
+      const rawUrl = r.url ?? r.metadata?.sourceURL ?? '';
+      const parsed = safeUrl(rawUrl);
+      return {
+        id: rawUrl || parsed.href,
+        part_name: r.title ?? r.metadata?.title ?? 'Unknown part',
+        description: r.description ?? r.metadata?.description ?? null,
+        price: null,
+        currency: 'TTD',
+        product_url: rawUrl || parsed.href,
+        image_url: null,
+        site_name: parsed.hostname.replace('www.', ''),
+        site_url: parsed.origin,
+      };
+    });
   } catch (err) {
     console.error('[web-inventory] liveScrapeFallback error:', err);
     return [];
