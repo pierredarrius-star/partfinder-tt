@@ -65,6 +65,7 @@ When user vehicle data is provided in the prompt context (their saved vehicles f
 type Message = { role: 'user' | 'assistant'; content: string }
 
 type Vehicle = {
+  id: string
   year: number | null
   brand: string | null
   name: string | null
@@ -74,7 +75,13 @@ type Vehicle = {
   model_code: string | null
 }
 
-function buildVehicleContext(vehicles: Vehicle[]): string {
+type OemCatalogRow = {
+  vehicle_id: string
+  category_name: string
+  category_url: string
+}
+
+function buildVehicleContext(vehicles: Vehicle[], catalog: OemCatalogRow[]): string {
   if (!vehicles?.length) return ''
   const lines = vehicles.map(v => {
     const label = [v.year, v.brand, v.name].filter(Boolean).join(' ')
@@ -83,7 +90,13 @@ function buildVehicleContext(vehicles: Vehicle[]): string {
       v.engine && v.engine.toUpperCase(),
       v.color_name,
     ].filter(Boolean).join(', ')
-    return `- ${label}${details ? ` (${details})` : ''}`
+    const categories = catalog
+      .filter(c => c.vehicle_id === v.id)
+      .map(c => c.category_name)
+    const catalogLine = categories.length > 0
+      ? `\n  OEM parts catalog: ${categories.join(', ')}`
+      : ''
+    return `- ${label}${details ? ` (${details})` : ''}${catalogLine}`
   })
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
 }
@@ -107,7 +120,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
 
-  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [])
+  // Fetch stored OEM catalog for all of the user's vehicles
+  let oemCatalog: OemCatalogRow[] = []
+  const vehicleIds = (vehicles ?? []).map(v => v.id).filter(Boolean)
+  if (vehicleIds.length > 0) {
+    const { data } = await serviceClient
+      .from('vehicle_oem_catalog')
+      .select('vehicle_id, category_name, category_url')
+      .in('vehicle_id', vehicleIds)
+    oemCatalog = data ?? []
+  }
+
+  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog)
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-3.1-flash-lite',

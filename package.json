@@ -18,8 +18,10 @@
     "@supabase/supabase-js": "^2.105.1",
     "@vercel/functions": "^3.5.0",
     "axios": "^1.13.6",
+    "cloakbrowser": "^0.3.30",
     "dotenv": "^17.3.1",
     "next": "16.1.6",
+    "playwright-core": "^1.60.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "swr": "^2.4.1"

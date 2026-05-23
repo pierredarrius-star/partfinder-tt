@@ -293,6 +293,22 @@ export default function OnboardingPage() {
       return
     }
 
+    const { vehicle: savedVehicle } = await res.json()
+
+    // Fire-and-forget: scrape PartSouq OEM catalog for this vehicle in the background.
+    // Navigation proceeds immediately — the catalog populates while the user is redirected.
+    if (savedVehicle?.vin) {
+      fetch('/api/partsouq-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          vin: savedVehicle.vin,
+          vehicle_id: savedVehicle.id,
+          year: savedVehicle.year,
+        }),
+      }).catch(() => {})
+    }
+
     router.push('/')
   }
 
