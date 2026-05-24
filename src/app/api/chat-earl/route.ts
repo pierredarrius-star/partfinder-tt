@@ -60,6 +60,13 @@ Commercial: Toyota Hiace, Nissan Caravan, NV200, Mitsubishi L300
 - After confirming the part, suggest they use PartFinder's search to send a request to suppliers
 - Use Trini-friendly tone where natural ("yeah man," "no problem") — don't overdo it
 
+# OEM parts catalog
+When OEM parts are listed in the context, they were pulled directly from PartSouq for that exact VIN — genuine manufacturer part numbers for their specific chassis.
+- Quote part numbers directly from the context. Always add: "double-check this with your supplier before ordering."
+- If matching parts appear in the context, list them clearly: part number, name, and any fitment notes.
+- If the part they're asking about is NOT in the context, say it wasn't found in their OEM catalog and suggest they search PartSouq with their VIN or request from suppliers.
+- Never invent part numbers — only quote what's in the provided context.
+
 When user vehicle data is provided in the prompt context (their saved vehicles from /profile), reference it naturally. Example: "I see you have a 2012 Nissan Tiida saved — is the part for that one?"`
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -81,7 +88,33 @@ type OemCatalogRow = {
   category_url: string
 }
 
-function buildVehicleContext(vehicles: Vehicle[], catalog: OemCatalogRow[]): string {
+type OemPartRow = {
+  vehicle_id: string
+  category_name: string
+  part_number: string
+  part_name: string
+  remarks: string | null
+}
+
+const PART_STOP_WORDS = new Set([
+  'a','an','the','is','it','its','for','do','i','me','my','can','you','give',
+  'get','find','show','tell','what','how','need','want','please','part','parts',
+  'number','numbers','oem','genuine','have','has','does','this','that','which',
+  'are','was','were','be','been','about','your','their','our',
+])
+
+function extractSearchTerms(message: string): string[] {
+  return message.toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2 && !PART_STOP_WORDS.has(w))
+}
+
+function buildVehicleContext(
+  vehicles: Vehicle[],
+  catalog: OemCatalogRow[],
+  matchingParts: OemPartRow[]
+): string {
   if (!vehicles?.length) return ''
   const lines = vehicles.map(v => {
     const label = [v.year, v.brand, v.name].filter(Boolean).join(' ')
@@ -90,13 +123,30 @@ function buildVehicleContext(vehicles: Vehicle[], catalog: OemCatalogRow[]): str
       v.engine && v.engine.toUpperCase(),
       v.color_name,
     ].filter(Boolean).join(', ')
-    const categories = catalog
-      .filter(c => c.vehicle_id === v.id)
-      .map(c => c.category_name)
-    const catalogLine = categories.length > 0
-      ? `\n  OEM parts catalog: ${categories.join(', ')}`
-      : ''
-    return `- ${label}${details ? ` (${details})` : ''}${catalogLine}`
+
+    const vehicleMatchingParts = matchingParts.filter(p => p.vehicle_id === v.id)
+
+    let partsSection = ''
+    if (vehicleMatchingParts.length > 0) {
+      const byCategory = new Map<string, OemPartRow[]>()
+      for (const p of vehicleMatchingParts) {
+        if (!byCategory.has(p.category_name)) byCategory.set(p.category_name, [])
+        byCategory.get(p.category_name)!.push(p)
+      }
+      const categoryLines = Array.from(byCategory.entries()).map(([cat, catParts]) => {
+        const partLines = catParts
+          .map(p => `    - ${p.part_number}: ${p.part_name}${p.remarks ? ` (${p.remarks})` : ''}`)
+          .join('\n')
+        return `  [${cat}]\n${partLines}`
+      })
+      partsSection = `\n  OEM parts matching query (VIN-specific):\n${categoryLines.join('\n')}`
+    } else {
+      // No keyword match — show category list so Earl knows what's available
+      const categories = catalog.filter(c => c.vehicle_id === v.id).map(c => c.category_name)
+      if (categories.length > 0) partsSection = `\n  OEM parts catalog: ${categories.join(', ')}`
+    }
+
+    return `- ${label}${details ? ` (${details})` : ''}${partsSection}`
   })
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
 }
@@ -120,18 +170,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'messages is required' }, { status: 400 })
   }
 
-  // Fetch stored OEM catalog for all of the user's vehicles
+  const lastMessage = messages[messages.length - 1]
+
+  // Fetch OEM catalog (always small) + keyword-search parts (only what's relevant)
   let oemCatalog: OemCatalogRow[] = []
+  let matchingParts: OemPartRow[] = []
   const vehicleIds = (vehicles ?? []).map(v => v.id).filter(Boolean)
   if (vehicleIds.length > 0) {
-    const { data } = await serviceClient
+    const terms = extractSearchTerms(lastMessage.content)
+    const catalogPromise = serviceClient
       .from('vehicle_oem_catalog')
       .select('vehicle_id, category_name, category_url')
       .in('vehicle_id', vehicleIds)
-    oemCatalog = data ?? []
+
+    let partsPromise = Promise.resolve({ data: [] as OemPartRow[] | null })
+    if (terms.length > 0) {
+      const orFilter = terms.map(t => `part_name.ilike.%${t}%`).join(',')
+      partsPromise = serviceClient
+        .from('vehicle_oem_parts')
+        .select('vehicle_id, category_name, part_number, part_name, remarks')
+        .in('vehicle_id', vehicleIds)
+        .or(orFilter)
+        .neq('part_number', '__empty__')
+        .limit(150) as any
+    }
+
+    const [catalogRes, partsRes] = await Promise.all([catalogPromise, partsPromise])
+    oemCatalog = catalogRes.data ?? []
+    matchingParts = (partsRes.data ?? []) as OemPartRow[]
   }
 
-  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog)
+  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-3.1-flash-lite',
@@ -144,8 +213,6 @@ export async function POST(request: Request) {
     role: (m.role === 'assistant' ? 'model' : 'user') as 'user' | 'model',
     parts: [{ text: m.content }],
   }))
-
-  const lastMessage = messages[messages.length - 1]
 
   try {
     const chat = model.startChat({ history })
