@@ -151,6 +151,8 @@ function buildVehicleContext(
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
 }
 
+export const maxDuration = 60
+
 export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader?.startsWith('Bearer ')) {
@@ -177,27 +179,34 @@ export async function POST(request: Request) {
   let matchingParts: OemPartRow[] = []
   const vehicleIds = (vehicles ?? []).map(v => v.id).filter(Boolean)
   if (vehicleIds.length > 0) {
-    const terms = extractSearchTerms(lastMessage.content)
+    const terms = extractSearchTerms(lastMessage.content).slice(0, 3)
+
+    // Run catalog fetch + one ilike query per term in parallel.
+    // Using individual .ilike() calls (not .or()) avoids PostgREST wildcard encoding issues.
     const catalogPromise = serviceClient
       .from('vehicle_oem_catalog')
       .select('vehicle_id, category_name, category_url')
       .in('vehicle_id', vehicleIds)
 
-    let partsPromise = Promise.resolve({ data: [] as OemPartRow[] | null })
-    if (terms.length > 0) {
-      const orFilter = terms.map(t => `part_name.ilike.%${t}%`).join(',')
-      partsPromise = serviceClient
+    const partsQueries = terms.map(t =>
+      serviceClient
         .from('vehicle_oem_parts')
         .select('vehicle_id, category_name, part_number, part_name, remarks')
         .in('vehicle_id', vehicleIds)
-        .or(orFilter)
+        .ilike('part_name', `%${t}%`)
         .neq('part_number', '__empty__')
-        .limit(150) as any
-    }
+        .limit(60)
+    )
 
-    const [catalogRes, partsRes] = await Promise.all([catalogPromise, partsPromise])
+    const [catalogRes, ...partsResults] = await Promise.all([catalogPromise, ...partsQueries])
     oemCatalog = catalogRes.data ?? []
-    matchingParts = (partsRes.data ?? []) as OemPartRow[]
+
+    // Merge results across terms, deduplicate by part_number
+    const seen = new Set<string>()
+    matchingParts = partsResults
+      .flatMap(r => (r.data ?? []) as OemPartRow[])
+      .filter(p => !seen.has(p.part_number) && seen.add(p.part_number))
+      .slice(0, 150)
   }
 
   const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
