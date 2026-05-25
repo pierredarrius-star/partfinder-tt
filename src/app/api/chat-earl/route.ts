@@ -238,7 +238,7 @@ export async function POST(request: Request) {
   const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.1-flash-lite',
+    model: 'gemini-3.5-flash',
     systemInstruction,
     generationConfig: { temperature: 0.4 },
   })
