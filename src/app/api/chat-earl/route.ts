@@ -97,17 +97,41 @@ type OemPartRow = {
 }
 
 const PART_STOP_WORDS = new Set([
+  // common English
   'a','an','the','is','it','its','for','do','i','me','my','can','you','give',
   'get','find','show','tell','what','how','need','want','please','part','parts',
   'number','numbers','oem','genuine','have','has','does','this','that','which',
-  'are','was','were','be','been','about','your','their','our',
+  'are','was','were','be','been','about','your','their','our','with','from',
+  // car brands — already in vehicle context, not useful for searching part names
+  'toyota','nissan','honda','mazda','suzuki','mitsubishi','hyundai','kia','isuzu',
+  'subaru','daihatsu','lexus','infiniti','acura',
+  // common model names
+  'hyryder','corolla','hilux','camry','prado','fortuner','yaris','vitz','aqua',
+  'tiida','sylphy','almera','latio','navara','frontier','xtrail','pathfinder',
+  'civic','city','accord','fit','jazz','grace','freed','stepwgn','stream',
+  'demio','axela','atenza','cx5','cx7','vitara','jimny','swift','alto',
+  'pajero','outlander','rvr','sportage','tucson','accent','elantra',
+  // years (4-digit numbers not useful for part search)
+  '2020','2021','2022','2023','2024','2025','2026',
 ])
+
+// Common misspellings → correct search term
+const PART_TYPO_MAP: Record<string, string> = {
+  'breaks': 'brake',
+  'break': 'brake',
+  'breakes': 'brake',
+  'tyer': 'tyre',
+  'tires': 'tyre',
+  'exaust': 'exhaust',
+  'shocks': 'shock',
+}
 
 function extractSearchTerms(message: string): string[] {
   return message.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 2 && !PART_STOP_WORDS.has(w))
+    .map(w => PART_TYPO_MAP[w] ?? w)
 }
 
 function buildVehicleContext(
@@ -179,7 +203,7 @@ export async function POST(request: Request) {
   let matchingParts: OemPartRow[] = []
   const vehicleIds = (vehicles ?? []).map(v => v.id).filter(Boolean)
   if (vehicleIds.length > 0) {
-    const terms = extractSearchTerms(lastMessage.content).slice(0, 3)
+    const terms = [...new Set(extractSearchTerms(lastMessage.content))].slice(0, 5)
 
     // Run catalog fetch + one ilike query per term in parallel.
     // Using individual .ilike() calls (not .or()) avoids PostgREST wildcard encoding issues.
