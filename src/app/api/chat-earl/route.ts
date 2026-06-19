@@ -128,12 +128,22 @@ const PART_TYPO_MAP: Record<string, string> = {
   'shocks': 'shock',
 }
 
+// Customer vocabulary → EPC (catalog) vocabulary. The OEM catalog uses "RH/LH"
+// (not "right/left") and "disc" (not "rotor"), so map the customer's word to the
+// term that actually appears in part_name — otherwise the ilike search misses.
+const PART_SYNONYM_MAP: Record<string, string> = {
+  'right': 'rh',
+  'left': 'lh',
+  'rotor': 'disc',
+  'rotors': 'disc',
+}
+
 function extractSearchTerms(message: string): string[] {
   return message.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 2 && !PART_STOP_WORDS.has(w))
-    .map(w => PART_TYPO_MAP[w] ?? w)
+    .map(w => PART_TYPO_MAP[w] ?? PART_SYNONYM_MAP[w] ?? w)
 }
 
 function buildVehicleContext(
@@ -175,6 +185,30 @@ function buildVehicleContext(
     return `- ${label}${details ? ` (${details})` : ''}${partsSection}`
   })
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
+}
+
+// Guardrail: Earl may only quote part numbers that were actually retrieved from
+// the OEM catalog for this vehicle. Any 5-5 digit number in the reply that isn't
+// in the retrieved set is treated as unverified (possible hallucination) and
+// redacted. Compared digits-only so 89542-12100 == 8954212100. Only runs when we
+// had catalog rows to check against; currently covers numeric (Toyota/most JDM)
+// part numbers, not Nissan/Honda alphanumeric formats.
+function verifyPartNumbers(
+  reply: string,
+  matchingParts: OemPartRow[]
+): { reply: string; redactedCount: number } {
+  const allowed = new Set(
+    matchingParts.map(p => p.part_number.replace(/\D/g, '')).filter(Boolean)
+  )
+  if (allowed.size === 0) return { reply, redactedCount: 0 }
+
+  let redactedCount = 0
+  const cleaned = reply.replace(/\b\d{5}-?\d{5}\b/g, (match) => {
+    if (allowed.has(match.replace(/\D/g, ''))) return match
+    redactedCount++
+    return '[unverified — check your VIN on PartSouq]'
+  })
+  return { reply: cleaned, redactedCount }
 }
 
 export const maxDuration = 60
@@ -238,7 +272,7 @@ export async function POST(request: Request) {
   const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
 
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.5-flash',
+    model: 'gemini-2.5-flash',
     systemInstruction,
     generationConfig: { temperature: 0.4 },
   })
@@ -252,7 +286,11 @@ export async function POST(request: Request) {
   try {
     const chat = model.startChat({ history })
     const result = await chat.sendMessage(lastMessage.content)
-    return NextResponse.json({ reply: result.response.text().trim() })
+    const { reply, redactedCount } = verifyPartNumbers(result.response.text().trim(), matchingParts)
+    if (redactedCount > 0) {
+      console.warn(`[chat-earl] redacted ${redactedCount} unverified part number(s)`)
+    }
+    return NextResponse.json({ reply })
   } catch (err: unknown) {
     console.error('[chat-earl]', err)
     return NextResponse.json({ error: 'Failed to get a response. Please try again.' }, { status: 500 })
