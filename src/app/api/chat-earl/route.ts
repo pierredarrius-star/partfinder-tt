@@ -284,22 +284,35 @@ export async function POST(request: Request) {
     // catalog lists a category that fits the query → scrape those categories live
     // (once), persist them, then re-search so Earl can answer this turn.
     if (matchingParts.length === 0 && terms.length > 0) {
-      const catTerms = terms.filter(t => !POSITION_WORDS.has(t))
-      const useTerms = catTerms.length > 0 ? catTerms : terms
+      const nounTerms = terms.filter(t => !POSITION_WORDS.has(t))
+      const posTerms = terms.filter(t => POSITION_WORDS.has(t))
+      const inName = (c: OemCatalogRow, t: string) => c.category_name.toLowerCase().includes(t)
 
-      // Rank catalog categories by how many query nouns they contain (most specific first).
+      // Rank categories: must match a query noun (positional words alone match too
+      // many) → then also match the position (front/rh) → then shortest name (the
+      // core group, e.g. "Radiator" over "Radiator Mounting Parts").
       const ranked = oemCatalog
         .map(c => ({
           c,
-          score: useTerms.filter(t => c.category_name.toLowerCase().includes(t)).length,
+          noun: nounTerms.filter(t => inName(c, t)).length,
+          pos: posTerms.filter(t => inName(c, t)).length,
         }))
-        .filter(x => x.score > 0)
-        .sort((a, b) => b.score - a.score)
+        .filter(x => x.noun > 0)
+        .sort((a, b) =>
+          b.noun - a.noun ||
+          b.pos - a.pos ||
+          a.c.category_name.length - b.c.category_name.length
+        )
         .map(x => x.c)
 
-      if (ranked.length > 0) {
+      // Dedup by name (same group appears under multiple parents; our parts storage
+      // keys on the name, so one scrape per name — and avoids racing parallel writes).
+      const seenCat = new Set<string>()
+      const rankedUnique = ranked.filter(c => seenCat.has(c.category_name) ? false : seenCat.add(c.category_name))
+
+      if (rankedUnique.length > 0) {
         // Don't re-pay Firecrawl for categories already scraped.
-        const names = [...new Set(ranked.map(c => c.category_name))]
+        const names = rankedUnique.map(c => c.category_name)
         const { data: existing } = await serviceClient
           .from('vehicle_oem_parts')
           .select('category_name')
@@ -307,7 +320,7 @@ export async function POST(request: Request) {
           .in('category_name', names)
         const alreadyScraped = new Set((existing ?? []).map(e => e.category_name))
         // ponytail: cap 3 categories/turn — covers normal queries, bounds latency+cost. Raise if misses show up.
-        const toScrape = ranked.filter(c => !alreadyScraped.has(c.category_name)).slice(0, 3)
+        const toScrape = rankedUnique.filter(c => !alreadyScraped.has(c.category_name)).slice(0, 3)
 
         if (toScrape.length > 0) {
           await Promise.all(toScrape.map(async (c) => {
