@@ -307,9 +307,6 @@ export default function Profile() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-slate-800">{v.year} {titleCase(v.brand)} {titleCase(v.name)}</h3>
-                  {v.is_primary && (
-                    <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Primary</span>
-                  )}
                 </div>
                 {(v.model_code || v.engine) && (
                   <p className="text-xs text-slate-500 mt-0.5">{[v.model_code, v.engine].filter(Boolean).join(' · ')}</p>
@@ -352,18 +349,12 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4">
               <Link
                 href={`/?vehicle=${v.id}`}
                 className="flex items-center justify-center bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold py-2.5 rounded-xl transition-colors active:scale-[0.98]"
               >
                 Search parts
-              </Link>
-              <Link
-                href={`/onboarding?edit=${v.id}`}
-                className="flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold py-2.5 rounded-xl transition-colors active:scale-[0.98]"
-              >
-                Edit vehicle
               </Link>
             </div>
 
@@ -402,16 +393,18 @@ export default function Profile() {
           </div>
         ))}
 
-        {/* Add vehicle */}
-        <Link
-          href="/onboarding"
-          className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-colors font-semibold text-sm"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-          Add another vehicle
-        </Link>
+        {/* Add vehicle — only when the garage is empty (one-car limit) */}
+        {vehicles.length === 0 && (
+          <Link
+            href="/onboarding"
+            className="flex items-center justify-center gap-2 w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 text-slate-400 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50 transition-colors font-semibold text-sm"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Add vehicle
+          </Link>
+        )}
 
       </main>
 

@@ -31,6 +31,15 @@ export async function POST(request: Request) {
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)
 
+  // One-car limit (temporary): block adding a second vehicle. The user_vehicles /
+  // is_primary model is left intact so multi-car can be re-enabled by removing this.
+  if ((count ?? 0) >= 1) {
+    return NextResponse.json(
+      { error: 'You can only save one vehicle right now. Delete your current car to add a different one.' },
+      { status: 409 }
+    )
+  }
+
   const { data, error } = await serviceClient
     .from('user_vehicles')
     .insert({
