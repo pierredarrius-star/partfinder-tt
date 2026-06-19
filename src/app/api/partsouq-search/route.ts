@@ -1,6 +1,6 @@
 import { scrapeCatalog, scrapeCategoryParts, type OemCategory } from '@/lib/partsouq-firecrawl'
 import { createClient } from '@supabase/supabase-js'
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -8,12 +8,15 @@ const serviceClient = createClient(
 )
 
 // The most-asked parts — pre-scraped on save (Step 4) so Earl answers them instantly.
+// Ordered by how often they're asked: the background scrape may not finish all 12
+// within the function budget, so the top of the list caches first.
 const COMMON_PART_KEYWORDS = [
-  'oil filter', 'air filter', 'fuel filter', 'spark plug', 'brake pad',
-  'brake disc', 'radiator', 'alternator', 'headlight', 'wiper', 'battery', 'belt',
+  'oil filter', 'brake pad', 'brake disc', 'spark plug', 'air filter',
+  'battery', 'wiper', 'fuel filter', 'belt', 'alternator', 'radiator', 'headlight',
 ]
 
-// Catalog scrape (~13s) + pre-scrape of ~12 common categories (chunked).
+// Catalog scrape (~13s) returns fast; the common-parts pre-scrape runs in the
+// background (after the response) and caches what it can before the budget ends.
 export const maxDuration = 60
 
 export async function POST(req: NextRequest) {
@@ -32,9 +35,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'no vehicle/catalog found', query }, { status: 404 })
     }
 
-    let prescrapedParts = 0
-
-    // Persist the catalog, then pre-scrape common categories — if a vehicle_id was given.
+    // Persist the catalog if a vehicle_id was given, then kick off the common-parts
+    // pre-scrape as background work (runs after the response) so the request returns
+    // fast and never times out — it caches as much as it can within the function budget.
     if (vehicle_id) {
       await serviceClient.from('vehicle_oem_catalog').delete().eq('vehicle_id', vehicle_id)
       const { error } = await serviceClient.from('vehicle_oem_catalog').insert(
@@ -49,13 +52,20 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'db insert failed' }, { status: 500 })
       }
 
-      prescrapedParts = await prescrapeCommon(vehicle_id, categories)
+      after(async () => {
+        try {
+          const n = await prescrapeCommon(vehicle_id, categories)
+          console.log(`[partsouq-search] prescraped ${n} parts for ${vehicle_id}`)
+        } catch (err) {
+          console.error('[partsouq-search] prescrape background', err)
+        }
+      })
     }
 
     return NextResponse.json({
       query,
       categoryCount: categories.length,
-      prescrapedParts,
+      prescrapeQueued: Boolean(vehicle_id),
       categories,
     })
   } catch (err) {
