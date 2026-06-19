@@ -8,10 +8,12 @@ const serviceClient = createClient(
 );
 
 export async function POST(req: NextRequest) {
-  const { vin, vehicle_id, year } = await req.json();
+  const { vin, frame, vehicle_id, year } = await req.json();
 
-  if (!vin) {
-    return NextResponse.json({ error: 'vin required' }, { status: 400 });
+  // Search by VIN when present, otherwise by frame/chassis number (JDM imports).
+  const query = (vin || frame || '').trim();
+  if (!query) {
+    return NextResponse.json({ error: 'vin or frame required' }, { status: 400 });
   }
 
   const browser = await launch({
@@ -25,8 +27,8 @@ export async function POST(req: NextRequest) {
   try {
     const page = await browser.newPage();
 
-    // Step 1: VIN search
-    const searchUrl = `https://partsouq.com/en/search/all?q=${encodeURIComponent(vin)}`;
+    // Step 1: search by VIN or frame number
+    const searchUrl = `https://partsouq.com/en/search/all?q=${encodeURIComponent(query)}`;
     await page.goto(searchUrl, { waitUntil: 'load', timeout: 30000 });
     await page.waitForFunction(
       () => !document.title.includes('Just a moment'),

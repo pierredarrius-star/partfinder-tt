@@ -51,6 +51,7 @@ export default function OnboardingPage() {
   const [fullName, setFullName] = useState('')
   const [whatsappNumber, setWhatsappNumber] = useState('')
   const [vin, setVin] = useState('')
+  const [frameNumber, setFrameNumber] = useState('')
   const [year, setYear] = useState('')
   const [brand, setBrand] = useState('')
   const [name, setName] = useState('')
@@ -265,6 +266,7 @@ export default function OnboardingPage() {
     const payload = {
       year,
       vin: vin.trim().toUpperCase() || null,
+      frame_number: frameNumber.trim().toUpperCase() || null,
       brand: brand.trim().toLowerCase(),
       name: name.trim().toLowerCase(),
       model_code: modelCode.trim().toLowerCase() || null,
@@ -297,12 +299,14 @@ export default function OnboardingPage() {
 
     // Fire-and-forget: scrape PartSouq OEM catalog for this vehicle in the background.
     // Navigation proceeds immediately — the catalog populates while the user is redirected.
-    if (savedVehicle?.vin) {
+    // Search by VIN when present, otherwise by frame/chassis number (JDM imports).
+    if (savedVehicle?.vin || savedVehicle?.frame_number) {
       fetch('/api/partsouq-search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           vin: savedVehicle.vin,
+          frame: savedVehicle.frame_number,
           vehicle_id: savedVehicle.id,
           year: savedVehicle.year,
         }),
@@ -740,6 +744,17 @@ export default function OnboardingPage() {
                 {scannedFields.has('model_code') && (
                   <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Frame number</label>
+                <input
+                  type="text"
+                  placeholder="e.g. NZE144-6008051 (for JDM imports without a VIN)"
+                  value={frameNumber}
+                  onChange={(e) => setFrameNumber(e.target.value)}
+                  className={inputClass('frame_number')}
+                />
               </div>
 
               <div>
