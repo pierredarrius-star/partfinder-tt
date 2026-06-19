@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+import { scrapeCategoryParts } from '@/lib/partsouq-firecrawl'
 
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -138,6 +139,13 @@ const PART_SYNONYM_MAP: Record<string, string> = {
   'rotors': 'disc',
 }
 
+// Positional words match too many catalog categories ("front" hits dozens), so
+// they're useless for picking WHICH category to lazy-scrape. Good for part_name
+// matching, excluded from category matching.
+const POSITION_WORDS = new Set([
+  'front', 'rear', 'rh', 'lh', 'left', 'right', 'upper', 'lower', 'inner', 'outer', 'side',
+])
+
 function extractSearchTerms(message: string): string[] {
   return message.toLowerCase()
     .replace(/[^a-z0-9\s]/g, ' ')
@@ -241,32 +249,94 @@ export async function POST(request: Request) {
   if (vehicleIds.length > 0) {
     const terms = [...new Set(extractSearchTerms(lastMessage.content))].slice(0, 5)
 
-    // Run catalog fetch + one ilike query per term in parallel.
-    // Using individual .ilike() calls (not .or()) avoids PostgREST wildcard encoding issues.
+    // Keyword-search parts by part_name. Individual .ilike() calls (not .or())
+    // avoid PostgREST wildcard encoding issues. Reused after a lazy scrape.
+    const searchParts = async (): Promise<OemPartRow[]> => {
+      if (terms.length === 0) return []
+      const results = await Promise.all(
+        terms.map(t =>
+          serviceClient
+            .from('vehicle_oem_parts')
+            .select('vehicle_id, category_name, part_number, part_name, remarks')
+            .in('vehicle_id', vehicleIds)
+            .ilike('part_name', `%${t}%`)
+            .neq('part_number', '__empty__')
+            .limit(60)
+        )
+      )
+      const seen = new Set<string>()
+      return results
+        .flatMap(r => (r.data ?? []) as OemPartRow[])
+        .filter(p => !seen.has(p.part_number) && seen.add(p.part_number))
+        .slice(0, 150)
+    }
+
     const catalogPromise = serviceClient
       .from('vehicle_oem_catalog')
       .select('vehicle_id, category_name, category_url')
       .in('vehicle_id', vehicleIds)
 
-    const partsQueries = terms.map(t =>
-      serviceClient
-        .from('vehicle_oem_parts')
-        .select('vehicle_id, category_name, part_number, part_name, remarks')
-        .in('vehicle_id', vehicleIds)
-        .ilike('part_name', `%${t}%`)
-        .neq('part_number', '__empty__')
-        .limit(60)
-    )
-
-    const [catalogRes, ...partsResults] = await Promise.all([catalogPromise, ...partsQueries])
+    const [catalogRes, firstParts] = await Promise.all([catalogPromise, searchParts()])
     oemCatalog = catalogRes.data ?? []
+    matchingParts = firstParts
 
-    // Merge results across terms, deduplicate by part_number
-    const seen = new Set<string>()
-    matchingParts = partsResults
-      .flatMap(r => (r.data ?? []) as OemPartRow[])
-      .filter(p => !seen.has(p.part_number) && seen.add(p.part_number))
-      .slice(0, 150)
+    // Step 3 — lazy scrape-on-miss. Nothing matched in the parts table, but the
+    // catalog lists a category that fits the query → scrape those categories live
+    // (once), persist them, then re-search so Earl can answer this turn.
+    if (matchingParts.length === 0 && terms.length > 0) {
+      const catTerms = terms.filter(t => !POSITION_WORDS.has(t))
+      const useTerms = catTerms.length > 0 ? catTerms : terms
+
+      // Rank catalog categories by how many query nouns they contain (most specific first).
+      const ranked = oemCatalog
+        .map(c => ({
+          c,
+          score: useTerms.filter(t => c.category_name.toLowerCase().includes(t)).length,
+        }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.c)
+
+      if (ranked.length > 0) {
+        // Don't re-pay Firecrawl for categories already scraped.
+        const names = [...new Set(ranked.map(c => c.category_name))]
+        const { data: existing } = await serviceClient
+          .from('vehicle_oem_parts')
+          .select('category_name')
+          .in('vehicle_id', vehicleIds)
+          .in('category_name', names)
+        const alreadyScraped = new Set((existing ?? []).map(e => e.category_name))
+        // ponytail: cap 3 categories/turn — covers normal queries, bounds latency+cost. Raise if misses show up.
+        const toScrape = ranked.filter(c => !alreadyScraped.has(c.category_name)).slice(0, 3)
+
+        if (toScrape.length > 0) {
+          await Promise.all(toScrape.map(async (c) => {
+            try {
+              const parts = await scrapeCategoryParts(c.category_url)
+              await serviceClient
+                .from('vehicle_oem_parts')
+                .delete()
+                .eq('vehicle_id', c.vehicle_id)
+                .eq('category_name', c.category_name)
+              if (parts.length > 0) {
+                await serviceClient.from('vehicle_oem_parts').insert(
+                  parts.map(p => ({
+                    vehicle_id: c.vehicle_id,
+                    category_name: c.category_name,
+                    part_number: p.part_number,
+                    part_name: p.part_name,
+                    remarks: p.remarks,
+                  }))
+                )
+              }
+            } catch (err) {
+              console.error('[chat-earl] lazy scrape failed', c.category_name, err)
+            }
+          }))
+          matchingParts = await searchParts()
+        }
+      }
+    }
   }
 
   const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
