@@ -560,7 +560,7 @@ export default function OnboardingPage() {
 
               {/* VIN / Chassis field with decoder */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN / Chassis Number (Optional)</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">VIN / Chassis Number (Recommended)</label>
                 <div className="flex flex-col sm:flex-row gap-2 items-stretch">
                   <div className="flex-1 min-w-0">
                     <input
@@ -593,6 +593,10 @@ export default function OnboardingPage() {
                     ) : 'Decode'}
                   </button>
                 </div>
+
+                <p className="mt-2 text-xs text-blue-800 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 leading-relaxed">
+                  💡 Add your VIN or frame number and Earl can pull your car's exact parts list — real OEM part numbers, ready the moment you ask.
+                </p>
 
                 {scannedFields.has('vin') && (
                   <span className="mt-1 text-xs text-green-600 font-semibold flex items-center gap-1"><CheckIcon /> Auto-filled</span>
