@@ -217,13 +217,26 @@ export default function Profile() {
   }
 
   const primaryVehicle = vehicles[0]
-  const starterChips = [
-    primaryVehicle
-      ? `What brake pads does my ${[primaryVehicle.year, titleCase(primaryVehicle.brand), titleCase(primaryVehicle.name)].filter(Boolean).join(' ')} need?`
-      : 'What brake pads do I need?',
-    'I hear a noise when I brake',
-    "What's the difference between front and rear pads?",
-    'How often should I change my oil?',
+  const carLabel = primaryVehicle
+    ? [primaryVehicle.year, titleCase(primaryVehicle.brand), titleCase(primaryVehicle.name)].filter(Boolean).join(' ')
+    : null
+  const starterGroups = [
+    {
+      label: '🔧 Find a part',
+      chips: [
+        carLabel ? `What brake pads does my ${carLabel} need?` : 'What brake pads do I need?',
+        'Front headlight part number',
+        'Oil filter part number',
+      ],
+    },
+    {
+      label: '🛢️ Maintenance & specs',
+      chips: [
+        'What engine oil grade should I use?',
+        'What transmission oil does my car take?',
+        'How often should I change my oil?',
+      ],
+    },
   ]
 
   if (loading) return null
@@ -447,15 +460,22 @@ export default function Profile() {
                     <p className="text-sm text-slate-700">Hey, I&apos;m Earl. What can I help you with today?</p>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-2 ml-11">
-                  {starterChips.map((chip) => (
-                    <button
-                      key={chip}
-                      onClick={() => sendMessage(chip)}
-                      className="text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 text-slate-600 hover:border-brand-400 hover:text-brand-600 transition-colors text-left"
-                    >
-                      {chip}
-                    </button>
+                <div className="ml-11 space-y-3">
+                  {starterGroups.map((group) => (
+                    <div key={group.label}>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">{group.label}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {group.chips.map((chip) => (
+                          <button
+                            key={chip}
+                            onClick={() => sendMessage(chip)}
+                            className="text-xs bg-white border border-slate-200 rounded-full px-3 py-1.5 text-slate-600 hover:border-brand-400 hover:text-brand-600 transition-colors text-left"
+                          >
+                            {chip}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </>
