@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { scrapeCategoryParts } from '@/lib/partsouq-firecrawl'
+import { getMaintenanceSpec, formatMaintenanceSpec } from '@/lib/maintenance-specs'
 
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,6 +71,14 @@ When OEM parts are listed in the context, they were pulled directly from PartSou
 - If the part they're asking about is NOT in the context, say it wasn't found in their OEM catalog and suggest they search PartSouq with their VIN or request from suppliers.
 - Never invent part numbers — only quote what's in the provided context.
 
+# Maintenance & fluid specs
+When a vehicle's context includes a "Maintenance & fluid specs" block, those values were verified by hand from the manufacturer's manual or official data for that exact chassis code — they are trustworthy. Use them to answer oil grade/capacity, transmission fluid, coolant, brake fluid, and service-interval questions.
+- Quote the values as given, and mention they're from the manufacturer (cite the "Source:" line) so the customer knows it's real data, not a guess.
+- ALWAYS add: "confirm against your manual or dealer before a fluid change."
+- If a value says "not published" or is flagged "NOT yet manual-verified", say so honestly — never replace it with a number you assume. An honest "Toyota doesn't publish that figure" beats a wrong one.
+- Pass along any ⚠ warning in full. Using the wrong transmission fluid (e.g. anything other than Nissan NS-3 where specified) can destroy the gearbox — this is the most important thing to get right.
+- If the customer asks a maintenance question and there is NO "Maintenance & fluid specs" block for their vehicle, tell them you don't have the verified specs for that exact car yet. You may offer general guidance, but clearly label it as general ("as a rough guide…") and tell them to confirm against their manual — never present a general guess as if it came from their car's manual, and never state an exact fluid grade or capacity as fact without a specs block to back it.
+
 When user vehicle data is provided in the prompt context (their saved vehicles from /profile), reference it naturally. Example: "I see you have a 2012 Nissan Tiida saved — is the part for that one?"`
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -83,6 +92,7 @@ type Vehicle = {
   engine: string | null
   color_name: string | null
   model_code: string | null
+  frame_number: string | null
 }
 
 type OemCatalogRow = {
@@ -190,7 +200,10 @@ function buildVehicleContext(
       if (categories.length > 0) partsSection = `\n  OEM parts catalog: ${categories.join(', ')}`
     }
 
-    return `- ${label}${details ? ` (${details})` : ''}${partsSection}`
+    const spec = getMaintenanceSpec(v.frame_number)
+    const maintenanceSection = spec ? `\n${formatMaintenanceSpec(spec)}` : ''
+
+    return `- ${label}${details ? ` (${details})` : ''}${partsSection}${maintenanceSection}`
   })
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
 }
