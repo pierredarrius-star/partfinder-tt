@@ -35,6 +35,35 @@ export type MaintenanceSpec = {
   source: string
 }
 
+// Toyota C-HR (JDM, 2016–2023) — petrol and hybrid use DIFFERENT transmission
+// fluids (CVT Fluid FE vs ATF WS), so each powertrain is one record reused across
+// its chassis codes (2WD/4WD, pre/post-facelift).
+const CHR_PETROL: MaintenanceSpec = {
+  chassis: 'NGX10 / NGX50',
+  label: 'Toyota C-HR 1.2 Turbo (NGX10 2WD / NGX50 4WD, 2016–2023)',
+  engine: '8NR-FTS 1.2L turbo petrol',
+  fluids: [
+    { name: 'Engine oil', spec: '0W-20 (Japan spec; Europe lists 5W-30), API SN / ILSAC', capacity: '3.7 L drain / ≈4.0 L with filter' },
+    { name: 'Transmission (CVT)', spec: 'Toyota CVT Fluid FE', warning: 'CVT Fluid FE only — NOT ATF WS (the hybrid’s fluid) and NOT the older “TC” CVT fluid. The wrong fluid can destroy the CVT.', capacity: '7.5 L total fill; drain-and-fill takes less (sealed)' },
+    { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (engine + turbo intercooler circuit)' },
+  ],
+  notes: ['Petrol C-HR = CVT on CVT Fluid FE, NOT the hybrid’s ATF WS. 4WD (NGX50) adds a rear differential — fluid not yet verified.'],
+  source: 'Toyota-Club.Net OEM fluids table + MOTUL Japan selector (NGX10)',
+}
+
+const CHR_HYBRID: MaintenanceSpec = {
+  chassis: 'ZYX10 / ZYX11',
+  label: 'Toyota C-HR Hybrid (ZYX10 / ZYX11, 1.8, 2016–2023)',
+  engine: '2ZR-FXE 1.8L hybrid',
+  fluids: [
+    { name: 'Engine oil', spec: '0W-20 (hybrid), API SN / ILSAC', capacity: '≈4.2 L with filter', confidence: 'unverified' },
+    { name: 'Transmission (hybrid e-CVT)', spec: 'Toyota ATF WS (sealed unit)', warning: 'ATF WS only — for the hybrid e-CVT. NOT the petrol C-HR’s CVT Fluid FE; do not interchange.', capacity: '3.6 L' },
+    { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (engine + inverter circuit)' },
+  ],
+  notes: ['Hybrid C-HR = sealed e-CVT on ATF WS, NOT the petrol’s CVT Fluid FE.'],
+  source: 'Toyota-Club.Net OEM fluids table + JDM sources (MOTUL, minkara)',
+}
+
 // Keys MUST be uppercase chassis codes (matched against the frame-number prefix).
 export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   NZE144: {
@@ -174,6 +203,12 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
     ],
     source: 'HyundaiNews 2022 spec sheet + Hyundai dealer service data + Ravenol fitment',
   },
+
+  // Toyota C-HR (JDM) — petrol NGX10/NGX50, hybrid ZYX10/ZYX11.
+  NGX10: CHR_PETROL,
+  NGX50: CHR_PETROL,
+  ZYX10: CHR_HYBRID,
+  ZYX11: CHR_HYBRID,
 }
 
 /**
