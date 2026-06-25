@@ -43,8 +43,8 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Engine oil', spec: '0W-20 (API SM / ILSAC; 5W-30 or 10W-30 also acceptable)', capacity: '3.4 L drain / 3.7 L with filter' },
       { name: 'Transmission (CVT, Super CVT-i)', spec: 'Toyota Genuine CVT Fluid TC', capacity: '7.98 L total fill; drain-and-fill ≈3.5–4 L (sealed unit)' },
       { name: 'Coolant', spec: 'Toyota Super Long Life Coolant', capacity: '5.8 L' },
-      { name: 'Rear differential (4WD only)', spec: 'Hypoid Gear Oil, API GL-5 85W-90', capacity: '0.5 L' },
-      { name: 'Transfer case (4WD only)', spec: 'Gear Oil, API GL-5 75W-90', capacity: '0.9 L' },
+      { name: 'Rear differential (4WD)', spec: 'Hypoid Gear Oil, API GL-5 85W-90', capacity: '0.5 L' },
+      { name: 'Transfer case (4WD)', spec: 'Gear Oil, API GL-5 75W-90', capacity: '0.9 L' },
       { name: 'Brake fluid', spec: 'Toyota Brake Fluid 2500H (DOT3)' },
     ],
     notes: ['NZE144 is the 4WD 1.5L — it has a rear diff and transfer case the 2WD NZE141 does not.'],
@@ -99,6 +99,32 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
     ],
     notes: ['Oil grade confirmed; capacities not yet manual-verified. The hybrid Fielder (NKE165G) uses ATF WS instead of CVT Fluid TC.'],
     source: 'MOTUL fitment selector + AISIN ATF/CVTF chart (grade verified; capacities pending manual)',
+  },
+
+  // Honda Vezel — the critical variant trap: petrol = CVT (HCF-2), hybrid =
+  // 7-speed dual-clutch (ATF DW-1, ~1.3 L). Wrong fluid OR wrong amount kills it.
+  RU1: {
+    chassis: 'RU1',
+    label: 'Honda Vezel (RU1, 2013–2021, 1.5 petrol 2WD)',
+    engine: 'L15B 1.5L petrol',
+    fluids: [
+      { name: 'Engine oil', spec: '0W-20 (Honda Genuine)', capacity: '≈3.4 L with filter', confidence: 'unverified' },
+      { name: 'Transmission (CVT)', spec: 'Honda CVT Fluid HCF-2', warning: 'Use HCF-2 ONLY — this 2nd-gen CVT requires HCF-2; the wrong fluid can damage it.', capacity: '≈3.9 L' },
+    ],
+    notes: ['Petrol Vezel = CVT (HCF-2). This is NOT the hybrid, which is a dual-clutch on ATF DW-1 — do not mix them up. The 4WD petrol (RU2) adds a rear differential (fluid not yet verified).'],
+    source: 'Honda Japan service data + Ravenol / Honda Parts fitment (engine-oil capacity approximate)',
+  },
+
+  RU3: {
+    chassis: 'RU3',
+    label: 'Honda Vezel Hybrid (RU3, 2013–2021, 1.5 i-DCD 2WD)',
+    engine: 'LEB 1.5L hybrid (Sport Hybrid i-DCD)',
+    fluids: [
+      { name: 'Engine oil', spec: '0W-20 (0W-16 also acceptable on later / Ultra NEXT spec)', capacity: '3.1 L drain / 3.3 L with filter' },
+      { name: 'Transmission (7-speed DUAL-CLUTCH, i-DCD)', spec: 'Honda ATF DW-1', warning: 'This is a DUAL-CLUTCH, not a CVT — it takes ATF DW-1 and holds only ~1.3 L. Do NOT use CVT fluid, and do NOT fill it like a normal automatic (overfill risk).', capacity: '≈1.3 L' },
+    ],
+    notes: ['Hybrid Vezel = 7-speed dual-clutch (i-DCD), NOT a CVT. Its clutch actuator uses brake fluid (DOT 3/4), serviced separately from the gear oil. The 4WD hybrid (RU4) adds a rear differential (fluid not yet verified).'],
+    source: 'Honda Japan official FAQ qa018 (engine oil) + MOTUL / Ravenol fitment (ATF DW-1, ~1.3 L)',
   },
 }
 
