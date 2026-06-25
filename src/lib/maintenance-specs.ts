@@ -278,6 +278,27 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   MXPB15: YARISCROSS_MXPB15,
   MXPJ10: YARISCROSS_MXPJ10,
   MXPJ15: YARISCROSS_MXPJ15,
+
+  // Nissan Kicks — matched by name. JDM = e-POWER (reduction gear on Matic Fluid S,
+  // NOT a CVT); export = 1.6 petrol (CVT on NS-3). ASK which before quoting.
+  KICKS: {
+    chassis: 'Kicks (matched by model name)',
+    matchNames: ['kicks'],
+    label: 'Nissan Kicks — e-POWER (JDM P15, 2020+) or 1.6 petrol (export)',
+    engine: 'e-POWER: HR12DE 1.2L (charges battery) + electric drive • Petrol: HR16DE 1.6L',
+    fluids: [
+      { name: 'Engine oil — e-POWER (1.2)', spec: '0W-20, API SN / ILSAC', capacity: '3.2 L drain / ≈3.4 L with filter' },
+      { name: 'Engine oil — 1.6 petrol', spec: '0W-20, API SN / ILSAC', capacity: '≈4.0 L with filter' },
+      { name: 'Reduction gear — e-POWER (NOT a CVT)', spec: 'Nissan Matic Fluid S', warning: 'The e-POWER has a reduction gear, NOT a CVT — it uses Nissan Matic Fluid S. Do NOT put NS-3 CVT fluid in it.', capacity: '≈1.94 L' },
+      { name: 'Transmission — 1.6 petrol (Xtronic CVT)', spec: 'Nissan CVT Fluid NS-3', warning: 'NS-3 only — for the petrol CVT. NOT the e-POWER (which uses Matic Fluid S).' },
+      { name: 'Coolant', spec: 'Nissan Long Life Coolant (blue)' },
+    ],
+    notes: [
+      'TWO versions — ASK whether it is the e-POWER (electric drive; engine only charges) or the 1.6 petrol BEFORE quoting a gearbox fluid. The JDM import is almost always the e-POWER, which has NO CVT (reduction gear on Matic Fluid S); the petrol has a CVT (NS-3).',
+      'Matched by model name (no single JDM chassis code).',
+    ],
+    source: 'Nissan Japan + MOTUL Japan (e-POWER SNP15: Matic Fluid S, 1.94 L) + AMSOIL (1.6 petrol)',
+  },
 }
 
 /**
