@@ -93,6 +93,34 @@ const XTRAIL_HNT32: MaintenanceSpec = {
   fluids: [XT_OIL, XT_CVT_HYBRID, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], source: XT_SOURCE,
 }
 
+// Toyota Yaris Cross (JDM, 2020+) — petrol (Direct-Shift CVT, CVT Fluid FE) vs
+// hybrid (e-CVT, ATF WS); 4WD by chassis code adds a rear diff (petrol) or an
+// electric rear motor unit (hybrid E-Four). Note the ultra-thin 0W-8 oil spec.
+const YC_OIL: FluidSpec = { name: 'Engine oil', spec: '0W-8 recommended (Toyota Genuine GLV-1) / 0W-16 acceptable (API SP). 0W-8 is a very thin oil often unavailable — 0W-16 is the safe everyday choice', capacity: '≈3.6 L with filter' }
+const YC_CVT_PETROL: FluidSpec = { name: 'Transmission (Direct-Shift CVT)', spec: 'Toyota CVT Fluid FE', warning: 'CVT Fluid FE only — NOT ATF WS (the hybrid’s fluid). The wrong fluid can damage the CVT.', capacity: '≈7.9 L total fill; drain-and-fill takes less' }
+const YC_ECVT_HYBRID: FluidSpec = { name: 'Transmission (hybrid e-CVT)', spec: 'Toyota ATF WS (sealed)', warning: 'ATF WS only — NOT the petrol’s CVT Fluid FE; do not interchange.', capacity: '2.6 L' }
+const YC_REAR_DIFF: FluidSpec = { name: 'Rear differential (4WD petrol)', spec: 'Gear oil, API GL-5 75W-90', capacity: '0.9 L' }
+const YC_REAR_MOTOR: FluidSpec = { name: 'Rear motor unit (4WD hybrid / E-Four)', spec: 'Toyota ATF WS', capacity: '1.2 L' }
+const YC_COOLANT: FluidSpec = { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (hybrid adds an inverter circuit)' }
+const YC_SOURCE = 'Toyota Japan owner’s manual (Yaris Cross) + MOTUL Japan + Toyota-Club.Net + alphas-jp fitment'
+
+const YARISCROSS_MXPB10: MaintenanceSpec = {
+  chassis: 'MXPB10', label: 'Toyota Yaris Cross 1.5 petrol 2WD (MXPB10, 2020+)', engine: 'M15A-FKS 1.5L petrol',
+  fluids: [YC_OIL, YC_CVT_PETROL, YC_COOLANT], source: YC_SOURCE,
+}
+const YARISCROSS_MXPB15: MaintenanceSpec = {
+  chassis: 'MXPB15', label: 'Toyota Yaris Cross 1.5 petrol 4WD (MXPB15, 2020+)', engine: 'M15A-FKS 1.5L petrol',
+  fluids: [YC_OIL, YC_CVT_PETROL, YC_REAR_DIFF, YC_COOLANT], source: YC_SOURCE,
+}
+const YARISCROSS_MXPJ10: MaintenanceSpec = {
+  chassis: 'MXPJ10', label: 'Toyota Yaris Cross Hybrid 2WD (MXPJ10, 2020+)', engine: 'M15A-FXE 1.5L hybrid',
+  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_COOLANT], source: YC_SOURCE,
+}
+const YARISCROSS_MXPJ15: MaintenanceSpec = {
+  chassis: 'MXPJ15', label: 'Toyota Yaris Cross Hybrid 4WD E-Four (MXPJ15, 2020+)', engine: 'M15A-FXE 1.5L hybrid',
+  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_REAR_MOTOR, YC_COOLANT], source: YC_SOURCE,
+}
+
 // Keys MUST be uppercase chassis codes (matched against the frame-number prefix).
 export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   NZE144: {
@@ -244,6 +272,12 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   NT32: XTRAIL_NT32,
   HT32: XTRAIL_HT32,
   HNT32: XTRAIL_HNT32,
+
+  // Toyota Yaris Cross (JDM) — petrol MXPB10/15, hybrid MXPJ10/15.
+  MXPB10: YARISCROSS_MXPB10,
+  MXPB15: YARISCROSS_MXPB15,
+  MXPJ10: YARISCROSS_MXPJ10,
+  MXPJ15: YARISCROSS_MXPJ15,
 }
 
 /**
