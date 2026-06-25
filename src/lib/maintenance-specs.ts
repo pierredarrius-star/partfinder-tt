@@ -25,6 +25,8 @@ export type FluidSpec = {
 
 export type MaintenanceSpec = {
   chassis: string
+  /** For non-JDM cars with no chassis code: lowercase model-name fragments to match on. */
+  matchNames?: string[]
   label: string
   engine: string
   fluids: FluidSpec[]
@@ -126,22 +128,61 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
     notes: ['Hybrid Vezel = 7-speed dual-clutch (i-DCD), NOT a CVT. Its clutch actuator uses brake fluid (DOT 3/4), serviced separately from the gear oil. The 4WD hybrid (RU4) adds a rear differential (fluid not yet verified).'],
     source: 'Honda Japan official FAQ qa018 (engine oil) + MOTUL / Ravenol fitment (ATF DW-1, ~1.3 L)',
   },
+
+  // Toyota Urban Cruiser Hyryder — India-built (not JDM), matched by name. Two
+  // powertrains with THREE different gearbox fluids: ASK which variant first.
+  HYRYDER: {
+    chassis: 'Hyryder (India-built — matched by model name, no JDM chassis code)',
+    matchNames: ['hyryder'],
+    label: 'Toyota Urban Cruiser Hyryder (2022+)',
+    engine: 'K15C 1.5L mild-hybrid petrol OR M15A 1.5L strong-hybrid (TNGA)',
+    fluids: [
+      { name: 'Engine oil — mild hybrid (K15C petrol)', spec: '0W-16 (0W-20 acceptable), API SP / ILSAC GF-6', capacity: '3.3 L' },
+      { name: 'Engine oil — strong hybrid (M15)', spec: '0W-16, API SP / ILSAC GF-6B', capacity: '3.4 L' },
+      { name: 'Transmission — mild hybrid 5-speed MANUAL', spec: 'Manual transmission gear oil SAE 75W', capacity: '2.6 L' },
+      { name: 'Transmission — mild hybrid 6-speed AUTO', spec: 'Toyota ATF AW-1', warning: 'ATF AW-1 — this is the torque-converter auto. NOT the same as the hybrid’s ATF WS; do not interchange.', capacity: '5.8 L' },
+      { name: 'Transmission — strong hybrid e-CVT', spec: 'Toyota ATF WS (sealed unit)', warning: 'ATF WS — for the hybrid e-CVT only. NOT the 6-speed auto’s ATF AW-1; do not interchange.', capacity: '2.6 L' },
+      { name: 'Coolant — mild hybrid', spec: 'Toyota Super Long Life Coolant (SLLC)', capacity: '4.2 L' },
+      { name: 'Coolant — strong hybrid', spec: 'Toyota Super Long Life Coolant (SLLC)', capacity: 'engine 4.8 L + inverter 1.9 L' },
+    ],
+    notes: [
+      'TWO powertrains — ASK the customer whether theirs is the mild-hybrid petrol (K15C) or the strong/full hybrid (M15 TNGA) BEFORE quoting a gearbox fluid. The mild hybrid is the normal petrol (manual or 6-speed auto); the strong hybrid is the self-charging full hybrid with the e-CVT.',
+      'India-built (not JDM) — matched by model name, it has no Japanese chassis code.',
+    ],
+    source: 'Toyota-Club.Net OEM fluids table + Toyota India / Maruti-Suzuki service data',
+  },
 }
 
 /**
- * Look up a verified maintenance spec by frame number or chassis code.
- * "NZE144-6008051" -> "NZE144" -> exact match. Returns null if not in the list
- * (Earl then falls back to clearly-labelled general guidance, never a fake spec).
+ * Look up a verified maintenance spec for a vehicle.
+ *  1. JDM cars: exact chassis-code match on the frame-number prefix
+ *     ("NZE144-6008051" -> "NZE144").
+ *  2. Non-JDM cars with no Japanese chassis code (e.g. Hyryder, Tucson): match the
+ *     model name against each record's `matchNames`.
+ * Returns null if not in the list (Earl then falls back to clearly-labelled general
+ * guidance, never a fake spec).
  *
- * ponytail: exact match on the frame prefix only. Variant sub-codes (e.g. 4WD NE12
- * vs 2WD E12) intentionally do NOT share a record — add the variant as its own
- * verified entry when it shows up, rather than fuzzy-matching and risking a wrong
- * fluid. Add explicit same-spec aliases here only if a real frame format misses.
+ * ponytail: exact frame-prefix match + simple name-substring fallback. Variant
+ * sub-codes (e.g. 4WD NE12 vs 2WD E12) intentionally do NOT share a record — add the
+ * variant as its own verified entry when it shows up, rather than risking a wrong fluid.
  */
-export function getMaintenanceSpec(frameOrCode?: string | null): MaintenanceSpec | null {
-  if (!frameOrCode) return null
-  const code = frameOrCode.trim().toUpperCase().split('-')[0]
-  return code ? (MAINTENANCE_SPECS[code] ?? null) : null
+export function getMaintenanceSpec(
+  frameOrCode?: string | null,
+  modelName?: string | null,
+): MaintenanceSpec | null {
+  // 1. JDM: chassis code from the frame-number prefix.
+  if (frameOrCode) {
+    const code = frameOrCode.trim().toUpperCase().split('-')[0]
+    if (code && MAINTENANCE_SPECS[code]) return MAINTENANCE_SPECS[code]
+  }
+  // 2. Non-JDM: match the model name.
+  if (modelName) {
+    const name = modelName.toLowerCase()
+    for (const spec of Object.values(MAINTENANCE_SPECS)) {
+      if (spec.matchNames?.some((m) => name.includes(m))) return spec
+    }
+  }
+  return null
 }
 
 /** Render a spec as a readable block for Earl's prompt context. */

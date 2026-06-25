@@ -201,7 +201,7 @@ function buildVehicleContext(
       if (categories.length > 0) partsSection = `\n  OEM parts catalog: ${categories.join(', ')}`
     }
 
-    const spec = getMaintenanceSpec(v.frame_number)
+    const spec = getMaintenanceSpec(v.frame_number, [v.brand, v.name].filter(Boolean).join(' '))
     const maintenanceSection = spec ? `\n${formatMaintenanceSpec(spec)}` : ''
 
     return `- ${label}${details ? ` (${details})` : ''}${partsSection}${maintenanceSection}`
