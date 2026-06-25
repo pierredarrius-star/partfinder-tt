@@ -64,6 +64,35 @@ const CHR_HYBRID: MaintenanceSpec = {
   source: 'Toyota-Club.Net OEM fluids table + JDM sources (MOTUL, minkara)',
 }
 
+// Nissan X-Trail T32 (JDM, 2013–2022) — all use MR20DD 2.0 + Xtronic CVT (NS-3).
+// The chassis code gives the drivetrain (T32/HT32 = 2WD, NT32/HNT32 = 4WD, which
+// adds a rear diff + transfer), so each code gets a precise record built from
+// shared fluid fragments. Petrol CVT ≈7.9 L, hybrid CVT ≈5.9 L.
+const XT_OIL: FluidSpec = { name: 'Engine oil', spec: '0W-20 (MR20DD), API SN / ILSAC', capacity: '≈4.3 L with filter' }
+const XT_CVT_PETROL: FluidSpec = { name: 'Transmission (Xtronic CVT)', spec: 'Nissan CVT Fluid NS-3', warning: 'Use NS-3 ONLY — other fluid may damage the CVT (per Nissan). Best done by someone who knows Nissan CVTs.', capacity: '≈7.9 L total' }
+const XT_CVT_HYBRID: FluidSpec = { name: 'Transmission (Xtronic CVT, hybrid)', spec: 'Nissan CVT Fluid NS-3', warning: 'Use NS-3 ONLY — other fluid may damage the CVT (per Nissan).', capacity: '≈5.9 L total' }
+const XT_REAR_DIFF: FluidSpec = { name: 'Rear differential', spec: 'Nissan Genuine Diff Oil Hypoid Super (GL-5)', capacity: '0.55 L' }
+const XT_TRANSFER: FluidSpec = { name: 'Transfer case', spec: 'Nissan Genuine transfer fluid', capacity: '0.31 L' }
+const XT_COOLANT: FluidSpec = { name: 'Coolant', spec: 'Nissan Long Life Coolant (blue)' }
+const XT_SOURCE = 'Nissan Japan official X-Trail lubricants page + FAQ #12548 + MOTUL Japan selector'
+
+const XTRAIL_T32: MaintenanceSpec = {
+  chassis: 'T32', label: 'Nissan X-Trail 2.0 petrol 2WD (T32, 2013–2022)', engine: 'MR20DD 2.0L',
+  fluids: [XT_OIL, XT_CVT_PETROL, XT_COOLANT], source: XT_SOURCE,
+}
+const XTRAIL_NT32: MaintenanceSpec = {
+  chassis: 'NT32', label: 'Nissan X-Trail 2.0 petrol 4WD (NT32, 2013–2022)', engine: 'MR20DD 2.0L',
+  fluids: [XT_OIL, XT_CVT_PETROL, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], source: XT_SOURCE,
+}
+const XTRAIL_HT32: MaintenanceSpec = {
+  chassis: 'HT32', label: 'Nissan X-Trail Hybrid 2WD (HT32, 2015–2022)', engine: 'MR20DD 2.0L hybrid',
+  fluids: [XT_OIL, XT_CVT_HYBRID, XT_COOLANT], source: XT_SOURCE,
+}
+const XTRAIL_HNT32: MaintenanceSpec = {
+  chassis: 'HNT32', label: 'Nissan X-Trail Hybrid 4WD (HNT32, 2015–2022)', engine: 'MR20DD 2.0L hybrid',
+  fluids: [XT_OIL, XT_CVT_HYBRID, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], source: XT_SOURCE,
+}
+
 // Keys MUST be uppercase chassis codes (matched against the frame-number prefix).
 export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   NZE144: {
@@ -209,6 +238,12 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
   NGX50: CHR_PETROL,
   ZYX10: CHR_HYBRID,
   ZYX11: CHR_HYBRID,
+
+  // Nissan X-Trail (JDM T32) — 2WD vs 4WD and petrol vs hybrid by chassis code.
+  T32: XTRAIL_T32,
+  NT32: XTRAIL_NT32,
+  HT32: XTRAIL_HT32,
+  HNT32: XTRAIL_HNT32,
 }
 
 /**
