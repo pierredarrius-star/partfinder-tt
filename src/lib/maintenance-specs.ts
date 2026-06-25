@@ -151,6 +151,29 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
     ],
     source: 'Toyota-Club.Net OEM fluids table + Toyota India / Maruti-Suzuki service data',
   },
+
+  // Hyundai Tucson — Korean (not JDM), matched by name. Two generations with
+  // different oils AND gearboxes (incl. a dual-clutch on the Gen-3 1.6 Turbo).
+  // ASK year + engine before quoting.
+  TUCSON: {
+    chassis: 'Tucson (Korean — matched by model name, no JDM chassis code)',
+    matchNames: ['tucson'],
+    label: 'Hyundai Tucson (TL 2015–2020 and NX4 2021+)',
+    engine: 'Gen 3 (TL): 2.0L or 1.6L Turbo • Gen 4 (NX4): 2.5L or 1.6T hybrid',
+    fluids: [
+      { name: 'Engine oil — Gen 3 (2015–2020), 2.0 / 1.6 Turbo', spec: '5W-30 (the 2.0 also lists 5W-20), API SN PLUS or above, full synthetic', capacity: '≈4.5 L', confidence: 'unverified' },
+      { name: 'Engine oil — Gen 4 (2021+), 2.5 petrol', spec: '0W-20, API SN PLUS or above, full synthetic', capacity: '≈5.6 L' },
+      { name: 'Engine oil — Gen 4 (2021+), 1.6T hybrid', spec: '0W-20 full synthetic (required)', capacity: '≈4.8 L' },
+      { name: 'Transmission — 6-speed AUTO (Gen 3 2.0; Gen 4 hybrid)', spec: 'Hyundai ATF SP-IV' },
+      { name: 'Transmission — 8-speed AUTO (Gen 4 2.5)', spec: 'Hyundai ATF SP-IV (SP-IV-RR / SP-4M)' },
+      { name: 'Transmission — 7-speed DUAL-CLUTCH (Gen 3 1.6 Turbo)', spec: 'Hyundai DCT fluid SAE 70E (GL-4)', warning: 'Dual-clutch — uses DCT gear oil (70E), NOT ATF SP-IV. Do not put automatic-transmission fluid in the DCT.', capacity: '≈2 L' },
+    ],
+    notes: [
+      'TWO generations with different specs — ASK the customer the year and engine BEFORE quoting. Key splits: engine oil is 5W-30 on the older (2015–2020) but 0W-20 on the newer (2021+); and the Gen-3 1.6 Turbo has a dual-clutch (DCT oil 70E), while everything else is a normal automatic (ATF SP-IV).',
+      'Korean (not JDM) — matched by model name, no Japanese chassis code.',
+    ],
+    source: 'HyundaiNews 2022 spec sheet + Hyundai dealer service data + Ravenol fitment',
+  },
 }
 
 /**
