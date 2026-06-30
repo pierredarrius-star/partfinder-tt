@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
-import { supabase } from '@/lib/supabase';
+import { getServiceClient } from '@/lib/supabase-server';
 import { executeParallelSearch } from '@/lib/orchestrator';
 
 export const maxDuration = 60;
@@ -28,10 +28,11 @@ export async function POST(request: Request) {
       });
     }
 
+    const supabase = getServiceClient();
     const fullQuery = `${partName} - ${vehicleDetails || 'Unknown Vehicle'} ${vin ? `(VIN: ${vin})` : ''}`;
 
     // 1. Create a new Anonymous User Profile if one doesn't exist for this session
-    let userId = '00000000-0000-0000-0000-000000000000'; 
+    let userId = '00000000-0000-0000-0000-000000000000';
     try {
       const { data: userCheck } = await supabase
         .from('profiles')

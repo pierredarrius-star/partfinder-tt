@@ -1,6 +1,8 @@
-import { supabase } from './supabase';
+import { getServiceClient } from './supabase-server';
 import { normalizePartQuery, generateSupplierMessage } from './ai';
 import { sendWhatsAppMessage } from './whatsapp';
+
+const supabase = getServiceClient();
 
 /**
  * 1. Takes the raw query, cleans it with AI

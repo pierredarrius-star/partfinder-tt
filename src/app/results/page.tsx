@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, useRef, Suspense } from "react";
-import { supabase } from "@/lib/supabase";
 import SupplierBlastLoader from "@/components/SupplierBlastLoader";
 import type { WebResult } from "@/lib/web-inventory";
 
@@ -39,96 +38,44 @@ function ResultsContent() {
       .finally(() => setWebLoading(false));
   }, [query]);
 
-  // WhatsApp realtime subscription (unchanged)
+  // WhatsApp status polling. Guests have no auth session, so direct Supabase
+  // reads are blocked by RLS — poll the service-role status route instead.
   useEffect(() => {
     if (!inquiryId) return;
 
-    const fetchInquiry = async () => {
-      const { data } = await supabase
-        .from("inquiries")
-        .select("*")
-        .eq("id", inquiryId)
-        .single();
-      if (data) {
-        setInquiryData(data);
-        if (data.status === "contacting_suppliers") setStatus("contacting");
-        if (data.status === "completed") setStatus("found");
-      }
-    };
+    let cancelled = false;
 
-    const fetchResponses = async () => {
-      const [{ data, error }, { count }] = await Promise.all([
-        supabase
-          .from("supplier_responses")
-          .select("*, suppliers(name, store_location, phone_number)")
-          .eq("inquiry_id", inquiryId)
-          .eq("status", "replied"),
-        supabase
-          .from("supplier_responses")
-          .select("*", { count: "exact", head: true })
-          .eq("inquiry_id", inquiryId),
-      ]);
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/inquiry-status?id=${inquiryId}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (cancelled) return;
 
-      if (error) {
-        console.error("[POLL] supplier_responses query failed:", error);
-        return;
-      }
+        console.log(
+          `[POLL] replied rows: ${json.responses?.length ?? 0} | total contacted: ${json.totalContacted}`
+        );
 
-      console.log(
-        `[POLL] replied rows: ${data?.length ?? 0} | total contacted: ${count}`
-      );
-
-      if (count != null) setTotalContacted(count);
-      if (data) {
-        setResponses(data);
-        if (data.length > 0) setStatus("found");
-      }
-    };
-
-    fetchInquiry();
-    fetchResponses();
-
-    const channel = supabase
-      .channel(`inquiry-${inquiryId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "supplier_responses",
-          filter: `inquiry_id=eq.${inquiryId}`,
-        },
-        async (payload) => {
-          console.log("Realtime change received!", payload);
-          if (pollIdRef.current) {
-            clearInterval(pollIdRef.current);
-            pollIdRef.current = null;
-          }
-          const [{ data: newResp }, { count }] = await Promise.all([
-            supabase
-              .from("supplier_responses")
-              .select("*, suppliers(name, store_location, phone_number)")
-              .eq("inquiry_id", inquiryId)
-              .eq("status", "replied"),
-            supabase
-              .from("supplier_responses")
-              .select("*", { count: "exact", head: true })
-              .eq("inquiry_id", inquiryId),
-          ]);
-
-          if (count != null) setTotalContacted(count);
-          if (newResp) {
-            setResponses(newResp);
-            if (newResp.length > 0) setStatus("found");
-          }
+        if (json.inquiry) {
+          setInquiryData(json.inquiry);
+          if (json.inquiry.status === "contacting_suppliers") setStatus("contacting");
+          if (json.inquiry.status === "completed") setStatus("found");
         }
-      )
-      .subscribe();
+        if (typeof json.totalContacted === "number") setTotalContacted(json.totalContacted);
+        if (json.responses) {
+          setResponses(json.responses);
+          if (json.responses.length > 0) setStatus("found");
+        }
+      } catch (err) {
+        console.error("[POLL] inquiry-status failed:", err);
+      }
+    };
 
-    pollIdRef.current = setInterval(fetchResponses, 8000);
+    fetchStatus();
+    pollIdRef.current = setInterval(fetchStatus, 4000);
 
     return () => {
-      supabase.removeChannel(channel);
+      cancelled = true;
       if (pollIdRef.current) clearInterval(pollIdRef.current);
     };
   }, [inquiryId]);
