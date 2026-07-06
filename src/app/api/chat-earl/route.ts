@@ -11,6 +11,10 @@ const serviceClient = createClient(
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
+// Donor cars seeded from the PartSouq API live in this user's garage
+// (seed-common-cars.mts). A data pointer, not a secret.
+const SEED_GARAGE_USER_ID = 'a27ff897-e72e-4a42-ad85-2b1653e1cb6c' // seed-vehicles@partfinder.tt
+
 const EARL_SYSTEM_PROMPT = `You are Earl, a senior auto parts specialist with 30+ years of experience in the Trinidad & Tobago market. You work for PartFinder TT, helping drivers understand their vehicles and figure out what parts they need.
 
 # Your personality
@@ -63,7 +67,7 @@ Commercial: Toyota Hiace, Nissan Caravan, NV200, Mitsubishi L300
 - Use Trini-friendly tone where natural ("yeah man," "no problem") — don't overdo it
 
 # OEM parts catalog
-When OEM parts are listed in the context, they were pulled directly from PartSouq for that exact VIN — genuine manufacturer part numbers for their specific chassis.
+When OEM parts are listed in the context, they were pulled directly from PartSouq — genuine manufacturer part numbers. The parts header states whether they are VIN-specific or model-matched from a donor catalog of the same chassis; for model-matched data, remind the customer to confirm fitment against their VIN when quoting a number.
 - Quote part numbers directly from the context. Always add: "double-check this with your supplier before ordering."
 - When the context has multiple variants (front/rear, LH/RH, upper/lower), ask which one the customer needs before quoting a number — don't list all variants at once.
 - Distinguish the core part from hardware and accessories. If someone asks for "brake pads", point to the PAD KIT, not the caliper bolts or dust covers. Use your mechanical knowledge to identify which item in the list is the actual part they want.
@@ -168,7 +172,8 @@ function extractSearchTerms(message: string): string[] {
 function buildVehicleContext(
   vehicles: Vehicle[],
   catalog: OemCatalogRow[],
-  matchingParts: OemPartRow[]
+  matchingParts: OemPartRow[],
+  twinModelByVehicle: Map<string, string>
 ): string {
   if (!vehicles?.length) return ''
   const lines = vehicles.map(v => {
@@ -194,7 +199,11 @@ function buildVehicleContext(
           .join('\n')
         return `  [${cat}]\n${partLines}`
       })
-      partsSection = `\n  OEM parts matching query (VIN-specific):\n${categoryLines.join('\n')}`
+      const twinCode = twinModelByVehicle.get(v.id)
+      const provenance = twinCode
+        ? `model-matched from a donor ${twinCode.toUpperCase()} catalog — same model, not VIN-exact`
+        : 'VIN-specific'
+      partsSection = `\n  OEM parts matching query (${provenance}):\n${categoryLines.join('\n')}`
     } else {
       // No keyword match — show category list so Earl knows what's available
       const categories = catalog.filter(c => c.vehicle_id === v.id).map(c => c.category_name)
@@ -260,6 +269,40 @@ export async function POST(request: Request) {
   let oemCatalog: OemCatalogRow[] = []
   let matchingParts: OemPartRow[] = []
   const vehicleIds = (vehicles ?? []).map(v => v.id).filter(Boolean)
+
+  // Seed-twin matching: seeded OEM parts live under donor cars in the seed
+  // garage. Match each customer car to its donor (model code → frame-number
+  // prefix → brand+name) so seeded data answers for everyone's car.
+  const twinByVehicle = new Map<string, string>()      // customer vehicle id → donor vehicle id
+  const twinModelByVehicle = new Map<string, string>() // customer vehicle id → donor model_code
+  if (vehicleIds.length > 0) {
+    const { data: seedCars } = await serviceClient
+      .from('user_vehicles')
+      .select('id, model_code, brand, name')
+      .eq('user_id', SEED_GARAGE_USER_ID)
+    for (const v of vehicles ?? []) {
+      if (!v.id || !seedCars?.length) continue
+      const byCode = (code: string) => (code ? seedCars.find(s => s.model_code === code) : undefined)
+      const twin =
+        byCode((v.model_code ?? '').trim().toLowerCase()) ??
+        byCode((v.frame_number ?? '').split('-')[0].trim().toLowerCase()) ??
+        seedCars.find(s =>
+          s.brand === (v.brand ?? '').trim().toLowerCase() &&
+          s.name === (v.name ?? '').trim().toLowerCase()
+        )
+      if (twin && twin.id !== v.id) {
+        twinByVehicle.set(v.id, twin.id)
+        twinModelByVehicle.set(v.id, twin.model_code ?? '')
+      }
+    }
+  }
+  const donorToCustomer = new Map([...twinByVehicle].map(([cust, donor]) => [donor, cust]))
+  const queryIds = [...vehicleIds, ...new Set(twinByVehicle.values())]
+  // Donor rows come back credited to the customer's car so the context builder
+  // and part-number guardrail treat them like the car's own data.
+  const reattribute = <T extends { vehicle_id: string }>(rows: T[]): T[] =>
+    rows.map(r => (donorToCustomer.has(r.vehicle_id) ? { ...r, vehicle_id: donorToCustomer.get(r.vehicle_id)! } : r))
+
   if (vehicleIds.length > 0) {
     const terms = [...new Set(extractSearchTerms(lastMessage.content))].slice(0, 5)
 
@@ -272,26 +315,28 @@ export async function POST(request: Request) {
           serviceClient
             .from('vehicle_oem_parts')
             .select('vehicle_id, category_name, part_number, part_name, remarks')
-            .in('vehicle_id', vehicleIds)
+            .in('vehicle_id', queryIds)
             .ilike('part_name', `%${t}%`)
             .neq('part_number', '__empty__')
             .limit(60)
         )
       )
       const seen = new Set<string>()
-      return results
-        .flatMap(r => (r.data ?? []) as OemPartRow[])
-        .filter(p => !seen.has(p.part_number) && seen.add(p.part_number))
-        .slice(0, 150)
+      return reattribute(
+        results
+          .flatMap(r => (r.data ?? []) as OemPartRow[])
+          .filter(p => !seen.has(p.part_number) && seen.add(p.part_number))
+          .slice(0, 150)
+      )
     }
 
     const catalogPromise = serviceClient
       .from('vehicle_oem_catalog')
       .select('vehicle_id, category_name, category_url')
-      .in('vehicle_id', vehicleIds)
+      .in('vehicle_id', queryIds)
 
     const [catalogRes, firstParts] = await Promise.all([catalogPromise, searchParts()])
-    oemCatalog = catalogRes.data ?? []
+    oemCatalog = reattribute(catalogRes.data ?? [])
     matchingParts = firstParts
 
     // Step 3 — lazy scrape-on-miss. Nothing matched in the parts table, but the
@@ -306,6 +351,7 @@ export async function POST(request: Request) {
       // many) → then also match the position (front/rh) → then shortest name (the
       // core group, e.g. "Radiator" over "Radiator Mounting Parts").
       const ranked = oemCatalog
+        .filter(c => c.category_url.startsWith('http')) // api-seeded donor rows have no scrapeable page
         .map(c => ({
           c,
           noun: nounTerms.filter(t => inName(c, t)).length,
@@ -366,7 +412,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts)
+  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts, twinModelByVehicle)
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
