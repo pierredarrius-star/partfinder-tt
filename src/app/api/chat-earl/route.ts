@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { scrapeCategoryParts } from '@/lib/partsouq-firecrawl'
 import { getMaintenanceSpec, formatMaintenanceSpec } from '@/lib/maintenance-specs'
+import { findSeedTwin } from '@/lib/seed-twin'
 
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -10,10 +11,6 @@ const serviceClient = createClient(
 )
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-
-// Donor cars seeded from the PartSouq API live in this user's garage
-// (seed-common-cars.mts). A data pointer, not a secret.
-const SEED_GARAGE_USER_ID = 'a27ff897-e72e-4a42-ad85-2b1653e1cb6c' // seed-vehicles@partfinder.tt
 
 const EARL_SYSTEM_PROMPT = `You are Earl, a senior auto parts specialist with 30+ years of experience in the Trinidad & Tobago market. You work for PartFinder TT, helping drivers understand their vehicles and figure out what parts they need.
 
@@ -276,21 +273,10 @@ export async function POST(request: Request) {
   const twinByVehicle = new Map<string, string>()      // customer vehicle id → donor vehicle id
   const twinModelByVehicle = new Map<string, string>() // customer vehicle id → donor model_code
   if (vehicleIds.length > 0) {
-    const { data: seedCars } = await serviceClient
-      .from('user_vehicles')
-      .select('id, model_code, brand, name')
-      .eq('user_id', SEED_GARAGE_USER_ID)
     for (const v of vehicles ?? []) {
-      if (!v.id || !seedCars?.length) continue
-      const byCode = (code: string) => (code ? seedCars.find(s => s.model_code === code) : undefined)
-      const twin =
-        byCode((v.model_code ?? '').trim().toLowerCase()) ??
-        byCode((v.frame_number ?? '').split('-')[0].trim().toLowerCase()) ??
-        seedCars.find(s =>
-          s.brand === (v.brand ?? '').trim().toLowerCase() &&
-          s.name === (v.name ?? '').trim().toLowerCase()
-        )
-      if (twin && twin.id !== v.id) {
+      if (!v.id) continue
+      const twin = await findSeedTwin(serviceClient, v)
+      if (twin) {
         twinByVehicle.set(v.id, twin.id)
         twinModelByVehicle.set(v.id, twin.model_code ?? '')
       }

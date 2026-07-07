@@ -138,6 +138,67 @@ export async function scrapeCategoryParts(categoryUrl: string): Promise<OemPart[
     }))
 }
 
+export type DecodedVehicle = {
+  brand: string | null
+  name: string | null
+  modelCode: string | null // e.g. "NZE144-AEXNK" (Toyota) or "NT30" (Nissan frames)
+  chassis: string | null // chassis prefix, lowercase, e.g. "nze144" / "nt30"
+  year: number | null
+  colorCode: string | null // factory paint code, e.g. "040"
+  trimColor: string | null // interior color code
+  engine: string | null // e.g. "QR20DE"
+  body: string | null // e.g. "wagon"
+}
+
+/**
+ * Decode a VIN or frame number via PartSouq's official JSON API, fetched through
+ * Firecrawl (1 credit; the API's GET endpoints pass Cloudflare on the basic
+ * proxy — POST endpoints don't, so parts listing stays with the laptop seeder).
+ * Returns null on any failure so callers can fall back to the page scrape.
+ */
+export async function decodeVehicle(vinOrFrame: string): Promise<DecodedVehicle | null> {
+  try {
+    const q = vinOrFrame.trim()
+    const data = await firecrawlScrape(
+      `${PARTSOUQ}/api/search/vehicle?q=${encodeURIComponent(q)}`,
+      ['markdown'],
+      1000,
+    )
+    // The JSON body comes back wrapped in markdown — cut from first { to last }.
+    const text = data.markdown ?? ''
+    const start = text.indexOf('{')
+    const end = text.lastIndexOf('}')
+    if (start === -1 || end <= start) return null
+    const veh = JSON.parse(text.slice(start, end + 1))?.response?.data?.[0]
+    if (!veh) return null
+
+    const attr = (k: string) => veh.attributes?.[k]?.value ?? null
+    const yearMatch = String(attr('date') ?? '').match(/(\d{4})/)
+    const isVin = /^[A-Z0-9]{17}$/i.test(q)
+    // Chassis code: Nissan/Honda put it in a `frames` attribute (e.g. "NT30");
+    // Toyota embeds it as the prefix of `model` (e.g. "NZE144-AEXNK"). Nissan's
+    // `model` is a long Laximo code that is NOT a chassis, so prefer `frames`,
+    // then the input frame (if not a VIN), then the model prefix.
+    const framesAttr = attr('frames')
+    const modelAttr = attr('model')
+    const chassisSource = framesAttr || (isVin ? '' : q) || modelAttr || ''
+    const chassis = String(chassisSource).split('-')[0].trim().toLowerCase() || null
+    return {
+      brand: veh.brand ? String(veh.brand).toLowerCase() : null,
+      name: veh.name ? String(veh.name).toLowerCase() : null,
+      modelCode: framesAttr || modelAttr,
+      chassis,
+      year: yearMatch ? +yearMatch[1] : null,
+      colorCode: attr('framecolor'),
+      trimColor: attr('trimcolor'),
+      engine: attr('engine') ? String(attr('engine')).toUpperCase() : null,
+      body: attr('bodyStyle') ? String(attr('bodyStyle')).toLowerCase() : null,
+    }
+  } catch {
+    return null
+  }
+}
+
 // --- helpers ---
 
 /** Firecrawl `links` items may be strings or objects; normalize to absolute URLs. */

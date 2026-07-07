@@ -1,4 +1,6 @@
-import { scrapeCatalog, scrapeCategoryParts, type OemCategory } from '@/lib/partsouq-firecrawl'
+import { scrapeCatalog, scrapeCategoryParts, decodeVehicle, type OemCategory } from '@/lib/partsouq-firecrawl'
+import { findSeedTwin } from '@/lib/seed-twin'
+import { lookupColorName } from '@/lib/color-codes'
 import { createClient } from '@supabase/supabase-js'
 import { after, NextRequest, NextResponse } from 'next/server'
 
@@ -29,6 +31,49 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // 1-credit API decode first: identify the exact car, fill in garage fields
+    // the user left empty (never overwrite their input), and skip the whole
+    // 30–65-credit page scrape when a seed twin already covers this model
+    // (Earl answers from the twin's catalog). Decode failure → old path.
+    if (vehicle_id) {
+      const decoded = await decodeVehicle(query)
+      const { data: row } = await serviceClient
+        .from('user_vehicles')
+        .select('id, brand, name, model_code, frame_number, year, color_code, color_name')
+        .eq('id', vehicle_id)
+        .single()
+
+      if (row) {
+        if (decoded) {
+          const updates: Record<string, unknown> = {}
+          if (!row.model_code && decoded.chassis) updates.model_code = decoded.chassis
+          if (!row.year && decoded.year) updates.year = decoded.year
+          if (!row.color_code && decoded.colorCode) updates.color_code = decoded.colorCode
+          if (!row.color_name && decoded.colorCode) {
+            const colorName = lookupColorName(row.brand ?? decoded.brand, decoded.colorCode)
+            if (colorName) updates.color_name = colorName
+          }
+          if (Object.keys(updates).length > 0) {
+            await serviceClient.from('user_vehicles').update(updates).eq('id', vehicle_id)
+            Object.assign(row, updates)
+          }
+        }
+
+        const twin = await findSeedTwin(serviceClient, row)
+        if (twin) {
+          console.log(`[partsouq-search] seed twin ${twin.model_code} covers ${vehicle_id} — skipping scrape`)
+          return NextResponse.json({
+            query,
+            twinned: true,
+            twinModel: twin.model_code,
+            categoryCount: 0,
+            prescrapeQueued: false,
+            categories: [],
+          })
+        }
+      }
+    }
+
     const categories = await scrapeCatalog(query)
 
     if (categories.length === 0) {
