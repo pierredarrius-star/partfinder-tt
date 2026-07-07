@@ -147,27 +147,31 @@ export default function OnboardingPage() {
     if (!decodeResult?.vehicle) return
     const v = decodeResult.vehicle
 
+    // "Apply" overwrites the mechanical facts — a decode/lookup is more authoritative
+    // than a plate-photo guess, so it should correct mismatches (e.g. body SUV→Wagon),
+    // not silently skip already-filled fields. Year is the one exception: it's kept
+    // fill-only, because a JDM build year often differs from the T&T registration year
+    // the owner entered, and we shouldn't clobber their value.
     if (decodeResult.source === 'nhtsa') {
       if (v.year && !year) setYear(String(v.year))
-      if (v.brand && !brand) setBrand(v.brand)
-      if (v.name && !name) setName(v.name)
-      if (v.body && !body) setBody(v.body)
-      if (v.engine && !engine) setEngine(v.engine)
+      if (v.brand) setBrand(v.brand)
+      if (v.name) setName(v.name)
+      if (v.body) setBody(v.body)
+      if (v.engine) setEngine(v.engine)
     } else if (decodeResult.source === 'chassis_db') {
-      if (v.brand && !brand) setBrand(v.brand)
-      if (v.name && !name) setName(v.name)
-      if (v.engine && !engine) setEngine(v.engine)
-      if (v.body && !body) setBody(v.body)
-      if (v.model_code && !modelCode) setModelCode(v.model_code)
+      if (v.brand) setBrand(v.brand)
+      if (v.name) setName(v.name)
+      if (v.engine) setEngine(v.engine)
+      if (v.body) setBody(v.body)
+      if (v.model_code) setModelCode(v.model_code)
       // year intentionally skipped — chassis decode gives a range, user picks exact year
     } else if (decodeResult.source === 'partsouq') {
-      // PartSouq resolves the exact car, so the year is precise (unlike a chassis range).
       if (v.year && !year) setYear(String(v.year))
-      if (v.brand && !brand) setBrand(v.brand)
-      if (v.name && !name) setName(v.name)
-      if (v.model_code && !modelCode) setModelCode(v.model_code)
-      if (v.engine && !engine) setEngine(v.engine)
-      if (v.body && !body) setBody(v.body)
+      if (v.brand) setBrand(v.brand)
+      if (v.name) setName(v.name)
+      if (v.model_code) setModelCode(v.model_code)
+      if (v.engine) setEngine(v.engine)
+      if (v.body) setBody(v.body)
     }
 
     setDecodeStatus('idle')
