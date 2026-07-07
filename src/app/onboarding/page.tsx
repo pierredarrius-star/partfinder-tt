@@ -24,7 +24,7 @@ type DecodeVehicle = {
 }
 
 type DecodeResponse = {
-  source: 'nhtsa' | 'chassis_db' | 'none' | null
+  source: 'nhtsa' | 'chassis_db' | 'partsouq' | 'none' | null
   vehicle: DecodeVehicle | null
   error?: string
   message?: string
@@ -111,7 +111,7 @@ export default function OnboardingPage() {
 
       const data: DecodeResponse = await res.json()
 
-      if (data.source === 'nhtsa' || data.source === 'chassis_db') {
+      if (data.source === 'nhtsa' || data.source === 'chassis_db' || data.source === 'partsouq') {
         setDecodeResult(data)
         setDecodeStatus('success')
       } else {
@@ -160,6 +160,14 @@ export default function OnboardingPage() {
       if (v.body && !body) setBody(v.body)
       if (v.model_code && !modelCode) setModelCode(v.model_code)
       // year intentionally skipped — chassis decode gives a range, user picks exact year
+    } else if (decodeResult.source === 'partsouq') {
+      // PartSouq resolves the exact car, so the year is precise (unlike a chassis range).
+      if (v.year && !year) setYear(String(v.year))
+      if (v.brand && !brand) setBrand(v.brand)
+      if (v.name && !name) setName(v.name)
+      if (v.model_code && !modelCode) setModelCode(v.model_code)
+      if (v.engine && !engine) setEngine(v.engine)
+      if (v.body && !body) setBody(v.body)
     }
 
     setDecodeStatus('idle')
@@ -622,7 +630,7 @@ export default function OnboardingPage() {
                     </p>
 
                     <div className="space-y-1.5 text-sm">
-                      {decodeResult.source === 'nhtsa' && decodeResult.vehicle.year && (
+                      {(decodeResult.source === 'nhtsa' || decodeResult.source === 'partsouq') && decodeResult.vehicle.year && (
                         <div className="flex gap-2">
                           <span className="text-slate-500 w-20 flex-shrink-0">Year</span>
                           <span className="text-slate-800 font-medium">{decodeResult.vehicle.year}</span>

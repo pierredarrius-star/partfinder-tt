@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { decodeVehicle } from '@/lib/partsouq-firecrawl'
+import { lookupColorName } from '@/lib/color-codes'
+
+// PartSouq fallback fetches via Firecrawl (a few seconds); give the route room.
+export const maxDuration = 30
 
 const serviceClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -56,6 +61,53 @@ function mapNhtsa(r: Record<string, string>, vin: string): NhtsaDecodeResult {
   }
 }
 
+// PartSouq API decode (1 Firecrawl credit) — the fallback when NHTSA and the
+// hand-built chassis_codes table both miss (typical for JDM imports). Writes the
+// resolved chassis back into chassis_codes so the NEXT lookup of that prefix is
+// free. Returns null on failure so the caller records the miss as before.
+async function partsouqFallback(
+  input: string,
+  format: 'vin' | 'chassis',
+) {
+  const decoded = await decodeVehicle(input)
+  if (!decoded || (!decoded.brand && !decoded.name)) return null
+
+  const prefix = (decoded.chassis ?? '').toUpperCase()
+  if (prefix) {
+    // Best-effort cache-back; a writeback failure must never break the decode.
+    const { error } = await serviceClient
+      .from('chassis_codes')
+      .upsert(
+        {
+          prefix,
+          brand: decoded.brand,
+          name: decoded.name,
+          engine: decoded.engine,
+          body: decoded.body,
+          year_start: decoded.year,
+          year_end: decoded.year,
+        },
+        { onConflict: 'prefix' },
+      )
+    if (error) console.warn('[decode-vin] chassis_codes writeback skipped:', error.message)
+  }
+
+  return {
+    source: 'partsouq' as const,
+    vehicle: {
+      vin: format === 'vin' ? input : null,
+      year: decoded.year,
+      brand: decoded.brand,
+      name: decoded.name,
+      model_code: prefix || decoded.modelCode,
+      body: decoded.body,
+      engine: decoded.engine,
+      color_code: decoded.colorCode,
+      color_name: lookupColorName(decoded.brand, decoded.colorCode),
+    },
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
@@ -84,13 +136,19 @@ export async function POST(request: Request) {
         const result: Record<string, string> = data?.Results?.[0] ?? {}
 
         const out = mapNhtsa(result, input)
-        if (!out.vehicle?.brand) {
-          try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'vin', reason: 'jdm_or_unsupported_vin' }) } catch { /* best-effort */ }
-          return NextResponse.json({ source: 'none', vehicle: null, error: 'jdm_or_unsupported_vin', raw: data })
+        if (out.vehicle?.brand) {
+          nhtsaCache.set(input, out)
+          return NextResponse.json(out)
         }
-        nhtsaCache.set(input, out)
-        return NextResponse.json(out)
+        // NHTSA doesn't cover this VIN (typical JDM import) → try PartSouq.
+        const psq = await partsouqFallback(input, 'vin')
+        if (psq) return NextResponse.json(psq)
+        try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'vin', reason: 'jdm_or_unsupported_vin' }) } catch { /* best-effort */ }
+        return NextResponse.json({ source: 'none', vehicle: null, error: 'jdm_or_unsupported_vin', raw: data })
       } catch (err: unknown) {
+        // NHTSA unreachable → still try PartSouq before giving up.
+        const psq = await partsouqFallback(input, 'vin')
+        if (psq) return NextResponse.json(psq)
         const msg = err instanceof Error ? err.message : 'NHTSA fetch failed'
         return NextResponse.json({ source: null, vehicle: null, raw: { error: msg } })
       }
@@ -106,6 +164,9 @@ export async function POST(request: Request) {
         .maybeSingle()
 
       if (error || !data) {
+        // Not in the hand-built table → PartSouq (and cache it back for next time).
+        const psq = await partsouqFallback(input, 'chassis')
+        if (psq) return NextResponse.json(psq)
         try { await serviceClient.from('decode_misses').insert({ input, format_detected: 'chassis', reason: 'chassis_prefix_missing' }) } catch { /* best-effort */ }
         return NextResponse.json({
           source: 'none',
