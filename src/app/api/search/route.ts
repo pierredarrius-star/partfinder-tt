@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { waitUntil } from '@vercel/functions';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getServiceClient, createServerSupabaseClient } from '@/lib/supabase-server';
 import { executeParallelSearch } from '@/lib/orchestrator';
 
 export const maxDuration = 60;
@@ -28,26 +28,21 @@ export async function POST(request: Request) {
       });
     }
 
+    // Full sign-up model: the search must belong to the logged-in user.
+    const authClient = await createServerSupabaseClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Sign in to search' }, { status: 401 });
+    }
+
     const supabase = getServiceClient();
     const fullQuery = `${partName} - ${vehicleDetails || 'Unknown Vehicle'} ${vin ? `(VIN: ${vin})` : ''}`;
 
-    // 1. Create a new Anonymous User Profile if one doesn't exist for this session
-    let userId = '00000000-0000-0000-0000-000000000000';
-    try {
-      const { data: userCheck } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
-
-      if (!userCheck) {
-         await supabase.from('profiles').insert([
-           { id: userId, full_name: 'Guest User', phone_number: '+18685550000' }
-         ]);
-      }
-    } catch (e) {
-      console.warn("Could not handle user profile, continuing with inquiry insert.");
-    }
+    // inquiries.user_id references profiles(id) — make sure this user has a row.
+    const userId = user.id;
+    await supabase
+      .from('profiles')
+      .upsert([{ id: userId, full_name: user.email ?? 'PartFinder User' }], { onConflict: 'id', ignoreDuplicates: true });
 
     // 3. Insert the inquiry into the database
     const { data: inquiry, error: insertError } = await supabase
