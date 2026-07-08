@@ -81,6 +81,12 @@ When a vehicle's context includes a "Maintenance & fluid specs" block, those val
 - Pass along any ⚠ warning in full. Using the wrong transmission fluid (e.g. anything other than Nissan NS-3 where specified) can destroy the gearbox — this is the most important thing to get right.
 - If the customer asks a maintenance question and there is NO "Maintenance & fluid specs" block for their vehicle, tell them you don't have the verified specs for that exact car yet. You may offer general guidance, but clearly label it as general ("as a rough guide…") and tell them to confirm against their manual — never present a general guess as if it came from their car's manual, and never state an exact fluid grade or capacity as fact without a specs block to back it.
 
+# Owner's maintenance log
+When a vehicle's context includes a "Maintenance log" block, those are records the owner logged in the app — each is just a task and a date. Done entries answer "when did I last…" questions; pending entries answer "what's due on my car". Quote the dates directly — they're the owner's own records.
+- If the log doesn't contain what they ask about, say the log doesn't show it and suggest adding it on the Maintenance page (Garage → FULL HISTORY).
+- If something is marked OVERDUE, mention it naturally when maintenance comes up — a friendly nudge, not a lecture.
+- The log records WHEN work was done, not what fluids/parts were used — combine it with the "Maintenance & fluid specs" block (if present) for the what.
+
 When user vehicle data is provided in the prompt context (their saved vehicles from /profile), reference it naturally. Example: "I see you have a 2012 Nissan Tiida saved — is the part for that one?"`
 
 type Message = { role: 'user' | 'assistant'; content: string }
@@ -109,6 +115,13 @@ type OemPartRow = {
   part_number: string
   part_name: string
   remarks: string | null
+}
+
+type MaintenanceRow = {
+  vehicle_id: string
+  task: string
+  due_date: string | null
+  done_at: string | null
 }
 
 const PART_STOP_WORDS = new Set([
@@ -166,13 +179,19 @@ function extractSearchTerms(message: string): string[] {
     .map(w => PART_TYPO_MAP[w] ?? PART_SYNONYM_MAP[w] ?? w)
 }
 
+function fmtLogDate(d: string): string {
+  return new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
 function buildVehicleContext(
   vehicles: Vehicle[],
   catalog: OemCatalogRow[],
   matchingParts: OemPartRow[],
-  twinModelByVehicle: Map<string, string>
+  twinModelByVehicle: Map<string, string>,
+  maintenanceRows: MaintenanceRow[]
 ): string {
   if (!vehicles?.length) return ''
+  const today = new Date().toISOString().slice(0, 10)
   const lines = vehicles.map(v => {
     const label = [v.year, v.brand, v.name].filter(Boolean).join(' ')
     const details = [
@@ -210,7 +229,26 @@ function buildVehicleContext(
     const spec = getMaintenanceSpec(v.frame_number, [v.brand, v.name].filter(Boolean).join(' '))
     const maintenanceSection = spec ? `\n${formatMaintenanceSpec(spec)}` : ''
 
-    return `- ${label}${details ? ` (${details})` : ''}${partsSection}${maintenanceSection}`
+    // Owner-entered maintenance log: done entries newest first, then pending.
+    const logRows = maintenanceRows.filter(m => m.vehicle_id === v.id)
+    let logSection = ''
+    if (logRows.length > 0) {
+      const done = logRows
+        .filter(r => r.done_at)
+        .sort((a, b) => (a.done_at! > b.done_at! ? -1 : 1))
+        .map(r => `    - ${r.task} — done ${fmtLogDate(r.done_at!)}`)
+      const pending = logRows
+        .filter(r => !r.done_at)
+        .sort((a, b) => ((a.due_date ?? '9999') < (b.due_date ?? '9999') ? -1 : 1))
+        .map(r => {
+          if (!r.due_date) return `    - ${r.task} — planned, no date set`
+          const overdue = r.due_date < today
+          return `    - ${r.task} — due ${fmtLogDate(r.due_date)}${overdue ? ' (OVERDUE)' : ''}`
+        })
+      logSection = `\n  Maintenance log (owner-entered; today is ${fmtLogDate(today)}):\n${[...pending, ...done].join('\n')}`
+    }
+
+    return `- ${label}${details ? ` (${details})` : ''}${partsSection}${maintenanceSection}${logSection}`
   })
   return `\n\nUser's saved vehicles:\n${lines.join('\n')}`
 }
@@ -398,7 +436,19 @@ export async function POST(request: Request) {
     }
   }
 
-  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts, twinModelByVehicle)
+  // Owner's maintenance log — task + date records entered in the app.
+  let maintenanceRows: MaintenanceRow[] = []
+  if (vehicleIds.length > 0) {
+    const { data: logData } = await serviceClient
+      .from('maintenance_tasks')
+      .select('vehicle_id, task, due_date, done_at')
+      .eq('user_id', user.id)
+      .in('vehicle_id', vehicleIds)
+      .limit(100)
+    maintenanceRows = logData ?? []
+  }
+
+  const systemInstruction = EARL_SYSTEM_PROMPT + buildVehicleContext(vehicles ?? [], oemCatalog, matchingParts, twinModelByVehicle, maintenanceRows)
 
   const model = genAI.getGenerativeModel({
     model: 'gemini-2.5-flash',
