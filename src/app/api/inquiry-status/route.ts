@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const [inquiryRes, repliesRes, countRes] = await Promise.all([
     supabase
       .from('inquiries')
-      .select('id, part_query, vin, status, user_id')
+      .select('id, part_query, vin, status, user_id, created_at')
       .eq('id', id)
       .maybeSingle(),
     supabase
