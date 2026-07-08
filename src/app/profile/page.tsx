@@ -551,18 +551,6 @@ export default function Profile() {
         <ChatBubbleIcon />
       </button>
 
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/80 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around py-4 px-6 z-30 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
-        {[
-          { label: 'Home', path: '/', active: false },
-          { label: 'Orders', path: '/orders', active: false },
-          { label: 'Profile', path: '/profile', active: true },
-        ].map((tab, i) => (
-          <Link href={tab.path} key={i} className={`flex flex-col items-center gap-1 ${tab.active ? 'text-brand-600' : 'text-slate-400'}`}>
-            <span className="text-[11px] font-extrabold uppercase tracking-wider">{tab.label}</span>
-          </Link>
-        ))}
-      </nav>
-
     </div>
   )
 }

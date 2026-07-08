@@ -2,13 +2,30 @@
 
 
 @theme {
+  /* legacy blue — still used by pages not yet migrated to Brass & Charcoal */
   --color-brand-50: #eff6ff;
   --color-brand-100: #dbeafe;
   --color-brand-500: #3b82f6;
   --color-brand-600: #2563eb;
   --color-brand-900: #1e3a8a;
-  
-  --font-sans: var(--font-outfit), "Inter", sans-serif;
+
+  /* Brass & Charcoal tokens — see design-research/directions/brass-charcoal/tokens.md */
+  --color-charcoal: #0F0E0D;   /* page background */
+  --color-surface: #1C1A17;    /* cards */
+  --color-elevated: #2A2722;   /* chips, nested surfaces */
+  --color-line: #3A352D;       /* borders */
+  --color-cream: #F5F1EA;      /* primary text */
+  --color-muted: #9C948A;      /* secondary text */
+  --color-subtle: #6B6259;     /* tertiary text, disabled */
+  --color-brass: #C9A158;      /* accent */
+  --color-brass-light: #D9B26A;/* accent hover */
+  --color-live: #5DBB7C;       /* positive / live */
+  --color-warm: #D4A574;       /* attention / pending */
+  --color-flag: #CE1126;       /* Trinidad red, errors */
+
+  --font-sans: var(--font-geist), "Inter", sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-bricolage), var(--font-geist), sans-serif;
 }
 
 @layer utilities {
