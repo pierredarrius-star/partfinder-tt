@@ -39,7 +39,26 @@ type ChatMessage = {
   content: string
 }
 
-type EditTarget = 'transmission' | 'wheels_tyres' | 'mileage' | null
+type EditTarget =
+  | 'transmission' | 'wheels_tyres' | 'mileage'
+  | 'full_name' | 'whatsapp_number'
+  | 'year' | 'brand' | 'name' | 'model_code' | 'body' | 'engine'
+  | 'color_code' | 'color_name' | 'vin' | 'frame_number' | 'nickname'
+  | null
+
+// DB storage conventions (see CLAUDE.md): lowercase for names/codes, uppercase for VIN/engine.
+const VEHICLE_FIELD_NORMALIZE: Partial<Record<Exclude<EditTarget, null>, (v: string) => string | number>> = {
+  year: v => parseInt(v.replace(/[^\d]/g, ''), 10) || 0,
+  brand: v => v.toLowerCase(),
+  name: v => v.toLowerCase(),
+  model_code: v => v.toLowerCase(),
+  body: v => v.toLowerCase(),
+  color_name: v => v.toLowerCase(),
+  nickname: v => v.toLowerCase(),
+  engine: v => v.toUpperCase(),
+  vin: v => v.toUpperCase(),
+  frame_number: v => v.toUpperCase(),
+}
 
 const titleCase = (s: string | null) => s ? s.replace(/\b\w/g, c => c.toUpperCase()) : s
 
@@ -78,15 +97,17 @@ export default function Garage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [tasks, setTasks] = useState<MaintenanceTask[]>([])
   const [userEmail, setUserEmail] = useState<string | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // single-field edit sheet (transmission / wheels & tyres / mileage)
+  // single-field edit sheet (car details + profile fields)
   const [editTarget, setEditTarget] = useState<EditTarget>(null)
   const [editSaving, setEditSaving] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   // Earl chat state
   const [chatOpen, setChatOpen] = useState(false)
@@ -105,6 +126,7 @@ export default function Garage() {
       }
 
       setUserEmail(session.user.email ?? null)
+      setUserId(session.user.id)
       setAccessToken(session.access_token)
 
       const [profileRes, vehiclesRes] = await Promise.all([
@@ -199,14 +221,36 @@ export default function Garage() {
   }
 
   const handleEditSave = async (value: string) => {
+    if (!editTarget) return
+
+    // profile fields save to user_profiles; the rest to the vehicle
+    if (editTarget === 'full_name' || editTarget === 'whatsapp_number') {
+      if (!userId) return
+      setEditSaving(true)
+      const patch = { [editTarget]: value }
+      const { error } = await supabase.from('user_profiles').upsert(
+        { user_id: userId, ...patch, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      )
+      setEditSaving(false)
+      if (error) {
+        alert(error.message)
+        return
+      }
+      setProfile(p => ({ full_name: p?.full_name ?? null, whatsapp_number: p?.whatsapp_number ?? null, ...patch }))
+      setEditTarget(null)
+      return
+    }
+
     const v = vehicles[0]
-    if (!v || !editTarget) return
+    if (!v) return
     setEditSaving(true)
 
+    const normalize = VEHICLE_FIELD_NORMALIZE[editTarget]
     const patch =
       editTarget === 'mileage'
         ? { mileage_km: parseInt(value.replace(/[^\d]/g, ''), 10) || 0, mileage_updated_at: new Date().toISOString() }
-        : { [editTarget]: value }
+        : { [editTarget]: normalize ? normalize(value) : value }
 
     const { error } = await supabase.from('user_vehicles').update(patch).eq('id', v.id)
     setEditSaving(false)
@@ -274,11 +318,39 @@ export default function Garage() {
     'How often should I change my oil?',
   ]
 
-  const editConfig: Record<Exclude<EditTarget, null>, { title: string; placeholder: string; type: 'text' | 'number'; initial: string }> = {
+  const editConfig: Record<Exclude<EditTarget, null>, { title: string; placeholder: string; type: 'text' | 'number' | 'tel'; initial: string }> = {
     transmission: { title: 'Transmission', placeholder: 'e.g. CVT, 5-speed manual', type: 'text', initial: v?.transmission ?? '' },
     wheels_tyres: { title: 'Wheels & tyres', placeholder: 'e.g. 15" · 185/65R15 Dunlop', type: 'text', initial: v?.wheels_tyres ?? '' },
     mileage: { title: 'Current mileage (km)', placeholder: 'e.g. 87420', type: 'number', initial: v?.mileage_km ? String(v.mileage_km) : '' },
+    full_name: { title: 'Your name', placeholder: 'e.g. John Smith', type: 'text', initial: profile?.full_name ?? '' },
+    whatsapp_number: { title: 'WhatsApp number', placeholder: '868-XXX-XXXX', type: 'tel', initial: profile?.whatsapp_number ?? '' },
+    year: { title: 'Year', placeholder: 'e.g. 2014', type: 'number', initial: v?.year ? String(v.year) : '' },
+    brand: { title: 'Brand', placeholder: 'e.g. Toyota', type: 'text', initial: titleCase(v?.brand ?? null) ?? '' },
+    name: { title: 'Model name', placeholder: 'e.g. Corolla Fielder', type: 'text', initial: titleCase(v?.name ?? null) ?? '' },
+    model_code: { title: 'Model / chassis code', placeholder: 'e.g. NZE161', type: 'text', initial: v?.model_code?.toUpperCase() ?? '' },
+    body: { title: 'Body', placeholder: 'e.g. Wagon', type: 'text', initial: titleCase(v?.body ?? null) ?? '' },
+    engine: { title: 'Engine', placeholder: 'e.g. 1NZ-FE', type: 'text', initial: v?.engine ?? '' },
+    color_code: { title: 'Color code', placeholder: 'e.g. 1F7', type: 'text', initial: v?.color_code ?? '' },
+    color_name: { title: 'Color name', placeholder: 'e.g. Classic Silver', type: 'text', initial: titleCase(v?.color_name ?? null) ?? '' },
+    vin: { title: 'VIN', placeholder: 'e.g. JT2AE09W9J0123456', type: 'text', initial: v?.vin ?? '' },
+    frame_number: { title: 'Frame number', placeholder: 'e.g. NZE161-7134982', type: 'text', initial: v?.frame_number ?? '' },
+    nickname: { title: 'Nickname', placeholder: 'e.g. My Corolla', type: 'text', initial: titleCase(v?.nickname ?? null) ?? '' },
   }
+
+  // rows for the edit-details sheet: label, current display value, target
+  const detailRows: { target: Exclude<EditTarget, null>; label: string; value: string }[] = v ? [
+    { target: 'year', label: 'Year', value: v.year ? String(v.year) : '—' },
+    { target: 'brand', label: 'Brand', value: titleCase(v.brand) ?? '—' },
+    { target: 'name', label: 'Model name', value: titleCase(v.name) ?? '—' },
+    { target: 'model_code', label: 'Model / chassis code', value: v.model_code?.toUpperCase() ?? '—' },
+    { target: 'body', label: 'Body', value: titleCase(v.body) ?? '—' },
+    { target: 'engine', label: 'Engine', value: v.engine ?? '—' },
+    { target: 'color_code', label: 'Color code', value: v.color_code ?? '—' },
+    { target: 'color_name', label: 'Color name', value: titleCase(v.color_name) ?? '—' },
+    { target: 'vin', label: 'VIN', value: v.vin ?? '—' },
+    { target: 'frame_number', label: 'Frame number', value: v.frame_number ?? '—' },
+    { target: 'nickname', label: 'Nickname', value: titleCase(v.nickname) ?? '—' },
+  ] : []
 
   if (loading) return <div className="min-h-screen bg-charcoal" />
 
@@ -306,12 +378,18 @@ export default function Garage() {
                 <p className="font-mono text-[11px] text-muted mt-0.5">{profile?.whatsapp_number ?? '—'}</p>
                 <p className="text-[11px] text-subtle truncate mt-0.5">{userEmail ?? ''}</p>
               </div>
-              <Link
-                href="/onboarding?edit=profile"
-                className="block px-4 py-3 text-sm font-medium text-cream hover:bg-elevated transition-colors"
+              <button
+                onClick={() => { setMenuOpen(false); setEditTarget('full_name') }}
+                className="w-full text-left px-4 py-3 text-sm font-medium text-cream hover:bg-elevated transition-colors"
               >
-                Edit my info
-              </Link>
+                Edit name
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); setEditTarget('whatsapp_number') }}
+                className="w-full text-left px-4 py-3 text-sm font-medium text-cream hover:bg-elevated transition-colors"
+              >
+                Edit WhatsApp number
+              </button>
               <button
                 onClick={handleSignOut}
                 className="w-full text-left px-4 py-3 text-sm font-semibold text-[#E05A6B] hover:bg-elevated transition-colors"
@@ -386,10 +464,13 @@ export default function Garage() {
 
             {/* details grid */}
             <div className="grid grid-cols-2 gap-2 mt-3">
-              <div className="px-3 py-2 rounded-lg bg-charcoal border border-line">
+              <button
+                onClick={() => setEditTarget('engine')}
+                className="px-3 py-2 rounded-lg text-left bg-charcoal border border-line"
+              >
                 <div className="font-mono text-[9px] tracking-widest uppercase mb-0.5 text-subtle">ENGINE</div>
                 <div className="font-mono text-[12px] font-medium text-cream">{v.engine || '—'}</div>
-              </div>
+              </button>
               <button
                 onClick={() => setEditTarget('transmission')}
                 className={`px-3 py-2 rounded-lg text-left ${v.transmission ? 'bg-charcoal border border-line' : 'border border-dashed border-subtle'}`}
@@ -399,12 +480,15 @@ export default function Garage() {
                   {v.transmission || '+ Add'}
                 </div>
               </button>
-              <div className="px-3 py-2 rounded-lg bg-charcoal border border-line">
+              <button
+                onClick={() => setDetailsOpen(true)}
+                className="px-3 py-2 rounded-lg text-left bg-charcoal border border-line"
+              >
                 <div className="font-mono text-[9px] tracking-widest uppercase mb-0.5 text-subtle">COLOR</div>
                 <div className="font-mono text-[12px] font-medium text-cream">
                   {[v.color_code, titleCase(v.color_name)].filter(Boolean).join(' · ') || '—'}
                 </div>
-              </div>
+              </button>
               <button
                 onClick={() => setEditTarget('wheels_tyres')}
                 className={`px-3 py-2 rounded-lg text-left ${v.wheels_tyres ? 'bg-charcoal border border-line' : 'border border-dashed border-subtle'}`}
@@ -473,6 +557,9 @@ export default function Garage() {
               <button onClick={() => openCatalog(v, 'amayama')} className="font-mono text-[10px] tracking-widest uppercase font-semibold text-muted">
                 AMAYAMA →
               </button>
+              <button onClick={() => setDetailsOpen(true)} className="font-mono text-[10px] tracking-widest uppercase font-semibold text-brass">
+                EDIT →
+              </button>
             </div>
           </section>
         )}
@@ -487,6 +574,37 @@ export default function Garage() {
           </button>
         )}
       </main>
+
+      {/* edit-details sheet: pick a field, fix just that one */}
+      {detailsOpen && !editTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setDetailsOpen(false)} />
+          <div className="relative w-full max-w-md bg-surface border-t border-line rounded-t-3xl pt-5 pb-8 shadow-2xl max-h-[80vh] flex flex-col">
+            <div className="w-10 h-1 bg-line rounded-full mx-auto mb-5 shrink-0" />
+            <h3 className="text-base font-bold text-cream mb-3 px-5 shrink-0">Edit car details</h3>
+            <div className="overflow-y-auto px-5">
+              <div className="rounded-xl overflow-hidden bg-charcoal border border-line">
+                {detailRows.map((row, i) => (
+                  <button
+                    key={row.target}
+                    onClick={() => setEditTarget(row.target)}
+                    className={`w-full flex items-center justify-between gap-3 px-4 py-3 text-left ${i > 0 ? 'border-t border-line' : ''}`}
+                  >
+                    <span className="font-mono text-[10px] tracking-widest uppercase text-subtle shrink-0">{row.label}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="text-[13px] text-cream truncate">{row.value}</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6B6259" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                        <path d="m9 18 6-6-6-6" />
+                      </svg>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-3 text-[10px] text-subtle text-center">Tap a field to fix just that one — nothing else changes.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* single-field edit sheet */}
       {editTarget && (
