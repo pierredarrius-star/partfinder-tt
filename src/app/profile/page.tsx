@@ -548,9 +548,6 @@ export default function Garage() {
               </svg>
             </Link>
             <div className="flex items-center justify-between mt-3 pt-3 border-t" style={{ borderColor: 'rgba(201,161,88,0.15)' }}>
-              <button onClick={() => setChatOpen(true)} className="font-mono text-[10px] tracking-widest uppercase font-semibold text-muted">
-                ASK EARL →
-              </button>
               <button onClick={() => openCatalog(v, 'partsouq')} className="font-mono text-[10px] tracking-widest uppercase font-semibold text-muted">
                 PARTSOUQ →
               </button>
@@ -618,6 +615,21 @@ export default function Garage() {
           onClose={() => setEditTarget(null)}
           onSave={handleEditSave}
         />
+      )}
+
+      {/* Earl floating chat bubble */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="fixed bottom-24 right-4 z-40 w-14 h-14 rounded-full flex items-center justify-center transition-all active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #C9A158, #8b6f3d)', boxShadow: '0 8px 24px rgba(0,0,0,0.4), 0 0 0 2px rgba(201,161,88,0.2)' }}
+          aria-label="Chat with Earl"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F0E0D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-live border-2 border-charcoal" />
+        </button>
       )}
 
       {/* Earl chat backdrop */}
