@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 import EditSheet from '@/components/EditSheet'
+import OdometerScanButton from '@/components/OdometerScanButton'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
 import { TRACKED_SERVICES, predictService, mileageIsStale } from '@/lib/service-tracker'
 
@@ -49,6 +50,7 @@ export default function MaintenancePage() {
   // mileage sheet
   const [mileageOpen, setMileageOpen] = useState(false)
   const [mileageSaving, setMileageSaving] = useState(false)
+  const [mileagePrefill, setMileagePrefill] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -204,9 +206,12 @@ export default function MaintenancePage() {
           <div className="font-mono text-[13px] font-semibold text-cream">
             {vehicle?.mileage_km != null ? `${vehicle.mileage_km.toLocaleString()} km` : '— km'}
           </div>
-          <button onClick={() => setMileageOpen(true)} className="font-mono text-[9px] tracking-widest uppercase text-brass">
-            UPDATE
-          </button>
+          <div className="flex items-center justify-end gap-2.5">
+            <OdometerScanButton onReading={km => { setMileagePrefill(String(km)); setMileageOpen(true) }} />
+            <button onClick={() => { setMileagePrefill(null); setMileageOpen(true) }} className="font-mono text-[9px] tracking-widest uppercase text-brass">
+              UPDATE
+            </button>
+          </div>
         </div>
       </header>
 
@@ -461,14 +466,20 @@ export default function MaintenancePage() {
             <div className="w-10 h-1 bg-line rounded-full mx-auto mb-5" />
             <h3 className="text-base font-bold text-cream mb-1">Mark &ldquo;{doneTarget.task}&rdquo; done</h3>
             <p className="text-[11px] text-muted mb-4">What&apos;s the odometer at now? It anchors the next-due prediction.</p>
-            <input
-              type="number"
-              value={doneOdometer}
-              onChange={e => setDoneOdometer(e.target.value)}
-              placeholder={vehicle?.mileage_km ? `e.g. ${vehicle.mileage_km.toLocaleString()}` : 'e.g. 87420'}
-              autoFocus
-              className="w-full rounded-xl px-4 py-3.5 text-base bg-charcoal border border-line text-cream placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brass focus:border-transparent"
-            />
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={doneOdometer}
+                onChange={e => setDoneOdometer(e.target.value)}
+                placeholder={vehicle?.mileage_km ? `e.g. ${vehicle.mileage_km.toLocaleString()}` : 'e.g. 87420'}
+                autoFocus
+                className="flex-1 min-w-0 rounded-xl px-4 py-3.5 text-base bg-charcoal border border-line text-cream placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brass focus:border-transparent"
+              />
+              <OdometerScanButton
+                onReading={km => setDoneOdometer(String(km))}
+                className="w-12 h-12 rounded-xl bg-charcoal border border-line shrink-0"
+              />
+            </div>
             <div className="flex gap-2 mt-4">
               <button
                 onClick={handleMarkDone}
@@ -495,9 +506,9 @@ export default function MaintenancePage() {
         title="Current mileage (km)"
         placeholder="e.g. 87420"
         type="number"
-        initial={vehicle?.mileage_km ? String(vehicle.mileage_km) : ''}
+        initial={mileagePrefill ?? (vehicle?.mileage_km ? String(vehicle.mileage_km) : '')}
         saving={mileageSaving}
-        onClose={() => setMileageOpen(false)}
+        onClose={() => { setMileageOpen(false); setMileagePrefill(null) }}
         onSave={handleMileageSave}
       />
     </div>

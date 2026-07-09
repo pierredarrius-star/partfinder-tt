@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 import EditSheet from '@/components/EditSheet'
+import OdometerScanButton from '@/components/OdometerScanButton'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
 import { mileageIsStale } from '@/lib/service-tracker'
 
@@ -109,6 +110,7 @@ export default function Garage() {
   const [editTarget, setEditTarget] = useState<EditTarget>(null)
   const [editSaving, setEditSaving] = useState(false)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [mileagePrefill, setMileagePrefill] = useState<string | null>(null)
 
   // Earl chat state
   const [chatOpen, setChatOpen] = useState(false)
@@ -322,7 +324,7 @@ export default function Garage() {
   const editConfig: Record<Exclude<EditTarget, null>, { title: string; placeholder: string; type: 'text' | 'number' | 'tel'; initial: string }> = {
     transmission: { title: 'Transmission', placeholder: 'e.g. CVT, 5-speed manual', type: 'text', initial: v?.transmission ?? '' },
     wheels_tyres: { title: 'Wheels & tyres', placeholder: 'e.g. 15" · 185/65R15 Dunlop', type: 'text', initial: v?.wheels_tyres ?? '' },
-    mileage: { title: 'Current mileage (km)', placeholder: 'e.g. 87420', type: 'number', initial: v?.mileage_km ? String(v.mileage_km) : '' },
+    mileage: { title: 'Current mileage (km)', placeholder: 'e.g. 87420', type: 'number', initial: mileagePrefill ?? (v?.mileage_km ? String(v.mileage_km) : '') },
     full_name: { title: 'Your name', placeholder: 'e.g. John Smith', type: 'text', initial: profile?.full_name ?? '' },
     whatsapp_number: { title: 'WhatsApp number', placeholder: '868-XXX-XXXX', type: 'tel', initial: profile?.whatsapp_number ?? '' },
     year: { title: 'Year', placeholder: 'e.g. 2014', type: 'number', initial: v?.year ? String(v.year) : '' },
@@ -512,9 +514,12 @@ export default function Garage() {
                     )}
                   </div>
                 </div>
-                <button onClick={() => setEditTarget('mileage')} className="font-mono text-[10px] tracking-widest uppercase text-brass">
-                  UPDATE
-                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <OdometerScanButton onReading={km => { setMileagePrefill(String(km)); setEditTarget('mileage') }} />
+                  <button onClick={() => { setMileagePrefill(null); setEditTarget('mileage') }} className="font-mono text-[10px] tracking-widest uppercase text-brass">
+                    UPDATE
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -615,7 +620,7 @@ export default function Garage() {
           type={editConfig[editTarget].type}
           initial={editConfig[editTarget].initial}
           saving={editSaving}
-          onClose={() => setEditTarget(null)}
+          onClose={() => { setEditTarget(null); setMileagePrefill(null) }}
           onSave={handleEditSave}
         />
       )}
