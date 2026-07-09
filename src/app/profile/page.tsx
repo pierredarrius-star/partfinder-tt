@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 import EditSheet from '@/components/EditSheet'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
+import { mileageIsStale } from '@/lib/service-tracker'
 
 type UserProfile = {
   full_name: string | null
@@ -505,7 +506,9 @@ export default function Garage() {
                   <div className="font-mono text-[12px] font-medium text-cream">
                     {v.mileage_km != null ? `${v.mileage_km.toLocaleString()} km` : '—'}
                     {v.mileage_updated_at && (
-                      <span className="text-[10px] font-normal text-subtle"> · updated {fmtDate(v.mileage_updated_at.slice(0, 10))}</span>
+                      <span className={`text-[10px] font-normal ${mileageIsStale(v.mileage_updated_at) ? 'text-warm' : 'text-subtle'}`}>
+                        {' '}· updated {fmtDate(v.mileage_updated_at.slice(0, 10))}
+                      </span>
                     )}
                   </div>
                 </div>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 import EditSheet from '@/components/EditSheet'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
+import { TRACKED_SERVICES, predictService, mileageIsStale } from '@/lib/service-tracker'
 
 type Vehicle = {
   id: string
@@ -37,7 +38,13 @@ export default function MaintenancePage() {
   const [taskName, setTaskName] = useState('')
   const [taskDate, setTaskDate] = useState('')
   const [taskDone, setTaskDone] = useState(false)
+  const [taskOdometer, setTaskOdometer] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // mark-done sheet (asks for the odometer at completion)
+  const [doneTarget, setDoneTarget] = useState<MaintenanceTask | null>(null)
+  const [doneOdometer, setDoneOdometer] = useState('')
+  const [doneSaving, setDoneSaving] = useState(false)
 
   // mileage sheet
   const [mileageOpen, setMileageOpen] = useState(false)
@@ -76,16 +83,29 @@ export default function MaintenancePage() {
     load()
   }, [])
 
+  // A logged odometer reading is also a mileage sample — keep the car's
+  // mileage fresh from it when it's newer/higher than what's stored.
+  async function syncVehicleMileage(odoKm: number, asOfDate: string) {
+    if (!vehicle) return
+    if (vehicle.mileage_km != null && odoKm <= vehicle.mileage_km) return
+    const patch = { mileage_km: odoKm, mileage_updated_at: `${asOfDate}T12:00:00Z` }
+    const { error } = await supabase.from('user_vehicles').update(patch).eq('id', vehicle.id)
+    if (!error) setVehicle(v => v ? { ...v, ...patch } : v)
+  }
+
   async function handleLogTask() {
     if (!taskName.trim() || !vehicle || !userId || saving) return
     setSaving(true)
 
+    const odoKm = taskDone ? parseInt(taskOdometer.replace(/[^\d]/g, ''), 10) || null : null
+    const doneDate = taskDone ? (taskDate || new Date().toISOString().slice(0, 10)) : null
     const row = {
       user_id: userId,
       vehicle_id: vehicle.id,
       task: taskName.trim(),
       due_date: taskDone ? null : (taskDate || null),
-      done_at: taskDone ? (taskDate || new Date().toISOString().slice(0, 10)) : null,
+      done_at: doneDate,
+      odometer_km: odoKm,
     }
 
     const { data, error } = await supabase.from('maintenance_tasks').insert([row]).select().single()
@@ -95,21 +115,33 @@ export default function MaintenancePage() {
       alert(error.message)
       return
     }
+    if (odoKm && doneDate) await syncVehicleMileage(odoKm, doneDate)
     setTasks(prev => [...prev, data])
     setLogOpen(false)
     setTaskName('')
     setTaskDate('')
     setTaskDone(false)
+    setTaskOdometer('')
   }
 
-  async function handleMarkDone(t: MaintenanceTask) {
+  async function handleMarkDone() {
+    if (!doneTarget || doneSaving) return
+    setDoneSaving(true)
     const today = new Date().toISOString().slice(0, 10)
-    const { error } = await supabase.from('maintenance_tasks').update({ done_at: today }).eq('id', t.id)
+    const odoKm = parseInt(doneOdometer.replace(/[^\d]/g, ''), 10) || null
+    const { error } = await supabase
+      .from('maintenance_tasks')
+      .update({ done_at: today, odometer_km: odoKm })
+      .eq('id', doneTarget.id)
+    setDoneSaving(false)
     if (error) {
       alert(error.message)
       return
     }
-    setTasks(prev => prev.map(x => x.id === t.id ? { ...x, done_at: today } : x))
+    if (odoKm) await syncVehicleMileage(odoKm, today)
+    setTasks(prev => prev.map(x => x.id === doneTarget.id ? { ...x, done_at: today, odometer_km: odoKm } : x))
+    setDoneTarget(null)
+    setDoneOdometer('')
   }
 
   async function handleDeleteTask(t: MaintenanceTask) {
@@ -192,6 +224,68 @@ export default function MaintenancePage() {
         </button>
         <p className="mt-1.5 text-center text-[10px] text-subtle">Just the task and the date — that&apos;s all we need.</p>
 
+        {/* stale-mileage nudge — one quiet row, never a pop-up */}
+        {vehicle && mileageIsStale(vehicle.mileage_updated_at) && (
+          <button
+            onClick={() => setMileageOpen(true)}
+            className="w-full mt-4 flex items-center gap-2.5 rounded-xl px-4 py-3 text-left bg-surface border border-warm/40"
+          >
+            <span className="text-[15px] shrink-0">🛣️</span>
+            <span className="text-[12px] text-muted leading-snug">
+              {vehicle.mileage_updated_at
+                ? <>Mileage was last updated {fmtDate(vehicle.mileage_updated_at.slice(0, 10))} — a quick update keeps predictions sharp.</>
+                : <>Add your current mileage — it&apos;s what makes service predictions possible.</>}
+              {' '}<span className="text-brass font-semibold">Update it</span>
+            </span>
+          </button>
+        )}
+
+        {/* SERVICE TRACKER — predictions from the owner's own records */}
+        <section className="pt-5">
+          <div className="font-mono text-[10px] tracking-widest uppercase mb-2 text-subtle">SERVICE TRACKER</div>
+          {TRACKED_SERVICES.map(svc => {
+            const p = vehicle ? predictService(svc, tasks, vehicle) : null
+            if (!p) return null
+            return (
+              <div key={svc.key} className="rounded-xl px-4 py-3.5 mb-2 bg-surface border border-line">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[14px] font-semibold text-cream">{svc.label}</div>
+                  {p.status === 'overdue' && (
+                    <span className="font-mono text-[9px] tracking-widest uppercase px-1.5 py-0.5 rounded bg-flag/15 text-[#E05A6B]">OVERDUE</span>
+                  )}
+                  {p.status === 'soon' && (
+                    <span className="font-mono text-[9px] tracking-widest uppercase px-1.5 py-0.5 rounded bg-warm/10 text-warm">DUE SOON</span>
+                  )}
+                  {p.status === 'ok' && (
+                    <span className="font-mono text-[9px] tracking-widest uppercase px-1.5 py-0.5 rounded bg-live/10 text-live">ON TRACK</span>
+                  )}
+                </div>
+
+                {p.status === 'unknown' ? (
+                  <p className="text-[11px] mt-1 text-muted">
+                    Not logged yet — log your last one (with the odometer) and predictions start.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-[12px] mt-1 text-cream">
+                      Next due ≈ <span className="font-mono text-brass">{fmtDate(p.dueDate)}</span>
+                      {p.dueKm != null && <span className="font-mono text-muted"> · {p.dueKm.toLocaleString()} km</span>}
+                    </p>
+                    <p className="text-[10px] mt-0.5 text-subtle">
+                      Last done {fmtDate(p.lastDoneDate, true)}
+                      {p.lastOdometer != null && ` at ${p.lastOdometer.toLocaleString()} km`}
+                      {p.kmPerDay != null
+                        ? ` · you drive ~${Math.round(p.kmPerDay)} km/day`
+                        : p.basis === 'date-only' ? ' · date-based — add odometer readings to sharpen this' : ''}
+                      {` · every ${svc.intervalKm.toLocaleString()} km or ${svc.intervalMonths} months`}
+                    </p>
+                  </>
+                )}
+              </div>
+            )
+          })}
+        </section>
+
         {/* NEEDS ATTENTION */}
         <section className="pt-5">
           <div className="font-mono text-[10px] tracking-widest uppercase mb-2 text-subtle">NEEDS ATTENTION</div>
@@ -216,7 +310,7 @@ export default function MaintenancePage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => handleMarkDone(t)}
+                  onClick={() => { setDoneOdometer(''); setDoneTarget(t) }}
                   className="shrink-0 font-mono text-[10px] tracking-widest uppercase px-2.5 py-1.5 rounded-lg bg-live/10 text-live active:scale-95"
                 >
                   ✓ DONE
@@ -323,6 +417,22 @@ export default function MaintenancePage() {
               <span className="text-[13px] text-muted">Already done — log it as history</span>
             </button>
 
+            {taskDone && (
+              <>
+                <label className="block font-mono text-[10px] font-semibold text-subtle uppercase tracking-[0.15em] mb-1.5 mt-4">
+                  Odometer at the time (km) — optional
+                </label>
+                <input
+                  type="number"
+                  value={taskOdometer}
+                  onChange={e => setTaskOdometer(e.target.value)}
+                  placeholder="e.g. 87420"
+                  className="w-full rounded-xl px-4 py-3 text-sm bg-charcoal border border-line text-cream placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brass focus:border-transparent"
+                />
+                <p className="mt-1.5 text-[10px] text-subtle">This is what powers the &ldquo;next due&rdquo; prediction.</p>
+              </>
+            )}
+
             <div className="flex gap-2 mt-5">
               <button
                 onClick={handleLogTask}
@@ -334,6 +444,42 @@ export default function MaintenancePage() {
               <button
                 onClick={() => setLogOpen(false)}
                 disabled={saving}
+                className="px-5 py-3 rounded-xl font-semibold text-sm bg-elevated text-muted transition-colors active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* mark-done sheet — captures the odometer at completion */}
+      {doneTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { if (!doneSaving) setDoneTarget(null) }} />
+          <div className="relative w-full max-w-md bg-surface border-t border-line rounded-t-3xl pt-5 pb-8 px-5 shadow-2xl">
+            <div className="w-10 h-1 bg-line rounded-full mx-auto mb-5" />
+            <h3 className="text-base font-bold text-cream mb-1">Mark &ldquo;{doneTarget.task}&rdquo; done</h3>
+            <p className="text-[11px] text-muted mb-4">What&apos;s the odometer at now? It anchors the next-due prediction.</p>
+            <input
+              type="number"
+              value={doneOdometer}
+              onChange={e => setDoneOdometer(e.target.value)}
+              placeholder={vehicle?.mileage_km ? `e.g. ${vehicle.mileage_km.toLocaleString()}` : 'e.g. 87420'}
+              autoFocus
+              className="w-full rounded-xl px-4 py-3.5 text-base bg-charcoal border border-line text-cream placeholder:text-subtle focus:outline-none focus:ring-2 focus:ring-brass focus:border-transparent"
+            />
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={handleMarkDone}
+                disabled={doneSaving}
+                className="flex-1 py-3 rounded-xl font-semibold text-sm bg-brass hover:bg-brass-light text-charcoal transition-colors active:scale-[0.98] disabled:opacity-60"
+              >
+                {doneSaving ? 'Saving…' : doneOdometer.trim() ? 'Mark done' : 'Mark done without odometer'}
+              </button>
+              <button
+                onClick={() => setDoneTarget(null)}
+                disabled={doneSaving}
                 className="px-5 py-3 rounded-xl font-semibold text-sm bg-elevated text-muted transition-colors active:scale-[0.98]"
               >
                 Cancel

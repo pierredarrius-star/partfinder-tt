@@ -7,6 +7,7 @@ export type MaintenanceTask = {
   task: string
   due_date: string | null
   done_at: string | null
+  odometer_km: number | null
   created_at: string
 }
 
