@@ -28,5 +28,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:png|jpg|jpeg|svg|ico|webp|webmanifest)).*)'],
+  // manifest.json + sw.js must stay public: browsers fetch them without auth
+  // cookies, and a login redirect breaks PWA install + push registration.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api|manifest\\.json|sw\\.js|.*\\.(?:png|jpg|jpeg|svg|ico|webp|webmanifest)).*)'],
 }
