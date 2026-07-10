@@ -13,6 +13,11 @@
  * Coverage: the most common Trinidad & Tobago cars (see memory tt-common-vehicles).
  * Capacities marked confidence:'unverified' are pending manual confirmation — Earl
  * is told to flag those rather than present them as exact.
+ *
+ * Each record also carries a verified service schedule (`intervals`) — the maker's
+ * easy-conditions AND severe-conditions figures from official pages; T&T driving
+ * counts as severe. Lines tagged (guidance) / (not published) are NOT manufacturer
+ * figures and Earl is instructed to present them accordingly.
  */
 
 export type FluidSpec = {
@@ -35,6 +40,51 @@ export type MaintenanceSpec = {
   source: string
 }
 
+// ---------------------------------------------------------------------------
+// Service schedules — verified 2026-07-10 from official maker pages (see each
+// line's provenance tag). Provenance rules Earl follows: "(... official)" =
+// manufacturer-published fact; "(guidance)" = standard practice, not the maker's
+// number; "(not published)" = the maker sets no figure and Earl says so.
+// ---------------------------------------------------------------------------
+
+// Toyota — toyota.jp FAQ #197 (oil), #199 (ATF/CVT), #5402 (plugs) + after-service pages
+const T_OIL = 'Engine oil: severe/T&T 7,500 km or 6 months; easy conditions 15,000 km or 12 months (Toyota official)'
+const T_OIL_TURBO = 'Engine oil (1.2 turbo): severe/T&T 2,500 km or 3 months; easy conditions 5,000 km or 6 months — much shorter than non-turbo Toyotas (Toyota official)'
+const T_CVT_TC = 'CVT fluid (Toyota CVT Fluid TC): no scheduled change in easy conditions; severe/T&T use every 100,000 km (Toyota official)'
+const T_CVT_FE = 'CVT fluid (Toyota CVT Fluid FE): no scheduled change in easy conditions; severe/T&T use every 100,000 km (Toyota official)'
+const T_ECVT = 'Hybrid e-CVT (ATF WS): sealed — no scheduled change (Toyota official)'
+const T_BASE: string[] = [
+  'Oil filter: with every oil change (guidance)',
+  'Brake fluid: every 2 years, with each inspection (Toyota official)',
+  'Coolant (Super LLC): first 160,000 km / 7 years, then every 80,000 km / 4 years (Toyota official)',
+  'Engine air filter: 50,000 km; severe/T&T 25,000 km (Toyota official)',
+  'Cabin (AC) filter: every year / 10,000–15,000 km (Toyota official)',
+  'Spark plugs: long-life iridium ≈100,000 km — plug type varies by engine, confirm the plug part number first (guidance)',
+]
+const FOUR_WD = 'Rear diff / transfer / 4WD rear unit: no fixed change interval — check at each service (guidance)'
+
+// Nissan — per-model FAQs #13788 (Note), #3111 (Kicks), #24868/9 (Sylphy); brand standard for X-Trail
+const N_OIL = 'Engine oil: severe/T&T 7,500 km or 6 months; easy conditions 15,000 km or 12 months (Nissan official)'
+const N_CVT = 'CVT fluid (NS-3): Nissan publishes NO fixed interval — sealed unit, severe use means earlier, dealer judgement. T&T CVT specialists commonly do 40–60,000 km; that is shop practice, not Nissan (not published)'
+const N_BASE: string[] = [
+  'Oil filter: with every oil change (guidance)',
+  'Brake fluid: every 2 years — Japanese inspection standard (guidance)',
+  'Coolant (Super LLC): first 160,000 km / 7 years, then every 80,000 km / 4 years (Nissan official)',
+  'Engine air filter: no maker figure in our verified sources — general guidance only (not published)',
+  'Spark plugs: long-life iridium ≈100,000 km — confirm the plug part number first (guidance)',
+]
+
+// Honda — Vezel FAQ qa018 (oil + filter) + honda.co.jp auto-parts pages (fluids, filters)
+const H_OIL = 'Engine oil: severe/T&T 7,500 km or 6 months; easy conditions 15,000 km or 12 months (Honda official)'
+const H_BASE: string[] = [
+  'Oil filter: every OTHER oil change — 30,000 km / 2 years, severe/T&T 15,000 km / 1 year (Honda official; Honda quirk, not every change)',
+  'Brake fluid: first change at 3 years, then every 2 years (Honda official)',
+  'Coolant (Ultra e-Coolant): commonly cited first 200,000 km / 10 years — NOT yet verified against a Honda page, flag it if asked (guidance)',
+  'Engine air filter: 50,000 km; severe/T&T (wet type) 25,000 km (Honda official)',
+  'Cabin (AC) filter: 15,000 km / 1 year (Honda official)',
+  'Spark plugs: long-life ≈100,000 km — confirm the plug part number first (guidance)',
+]
+
 // Toyota C-HR (JDM, 2016–2023) — petrol and hybrid use DIFFERENT transmission
 // fluids (CVT Fluid FE vs ATF WS), so each powertrain is one record reused across
 // its chassis codes (2WD/4WD, pre/post-facelift).
@@ -47,8 +97,9 @@ const CHR_PETROL: MaintenanceSpec = {
     { name: 'Transmission (CVT)', spec: 'Toyota CVT Fluid FE', warning: 'CVT Fluid FE only — NOT ATF WS (the hybrid’s fluid) and NOT the older “TC” CVT fluid. The wrong fluid can destroy the CVT.', capacity: '7.5 L total fill; drain-and-fill takes less (sealed)' },
     { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (engine + turbo intercooler circuit)' },
   ],
+  intervals: [T_OIL_TURBO, T_CVT_FE, ...T_BASE],
   notes: ['Petrol C-HR = CVT on CVT Fluid FE, NOT the hybrid’s ATF WS. 4WD (NGX50) adds a rear differential — fluid not yet verified.'],
-  source: 'Toyota-Club.Net OEM fluids table + MOTUL Japan selector (NGX10)',
+  source: 'Toyota-Club.Net OEM fluids table + MOTUL Japan selector (NGX10); schedule from Toyota official FAQ #197/#199',
 }
 
 const CHR_HYBRID: MaintenanceSpec = {
@@ -60,37 +111,38 @@ const CHR_HYBRID: MaintenanceSpec = {
     { name: 'Transmission (hybrid e-CVT)', spec: 'Toyota ATF WS (sealed unit)', warning: 'ATF WS only — for the hybrid e-CVT. NOT the petrol C-HR’s CVT Fluid FE; do not interchange.', capacity: '3.6 L' },
     { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (engine + inverter circuit)' },
   ],
+  intervals: [T_OIL, T_ECVT, ...T_BASE],
   notes: ['Hybrid C-HR = sealed e-CVT on ATF WS, NOT the petrol’s CVT Fluid FE.'],
-  source: 'Toyota-Club.Net OEM fluids table + JDM sources (MOTUL, minkara)',
+  source: 'Toyota-Club.Net OEM fluids table + JDM sources (MOTUL, minkara); schedule from Toyota official FAQ #197/#199',
 }
 
 // Nissan X-Trail T32 (JDM, 2013–2022) — all use MR20DD 2.0 + Xtronic CVT (NS-3).
 // The chassis code gives the drivetrain (T32/HT32 = 2WD, NT32/HNT32 = 4WD, which
 // adds a rear diff + transfer), so each code gets a precise record built from
 // shared fluid fragments. Petrol CVT ≈7.9 L, hybrid CVT ≈5.9 L.
-const XT_OIL: FluidSpec = { name: 'Engine oil', spec: '0W-20 (MR20DD), API SN / ILSAC', capacity: '≈4.3 L with filter' }
+const XT_OIL: FluidSpec = { name: 'Engine oil', spec: '0W-20 (MR20DD), API SN / ILSAC', capacity: '3.6 L drain / 3.8 L with filter (per the T32 owner’s manual)' }
 const XT_CVT_PETROL: FluidSpec = { name: 'Transmission (Xtronic CVT)', spec: 'Nissan CVT Fluid NS-3', warning: 'Use NS-3 ONLY — other fluid may damage the CVT (per Nissan). Best done by someone who knows Nissan CVTs.', capacity: '≈7.9 L total' }
 const XT_CVT_HYBRID: FluidSpec = { name: 'Transmission (Xtronic CVT, hybrid)', spec: 'Nissan CVT Fluid NS-3', warning: 'Use NS-3 ONLY — other fluid may damage the CVT (per Nissan).', capacity: '≈5.9 L total' }
-const XT_REAR_DIFF: FluidSpec = { name: 'Rear differential', spec: 'Nissan Genuine Diff Oil Hypoid Super (GL-5)', capacity: '0.55 L' }
-const XT_TRANSFER: FluidSpec = { name: 'Transfer case', spec: 'Nissan Genuine transfer fluid', capacity: '0.31 L' }
-const XT_COOLANT: FluidSpec = { name: 'Coolant', spec: 'Nissan Long Life Coolant (blue)' }
-const XT_SOURCE = 'Nissan Japan official X-Trail lubricants page + FAQ #12548 + MOTUL Japan selector'
+const XT_REAR_DIFF: FluidSpec = { name: 'Rear differential', spec: 'Nissan Genuine Diff Oil Hypoid Super (API GL-5, 80W-90)', capacity: '0.55 L' }
+const XT_TRANSFER: FluidSpec = { name: 'Transfer case', spec: 'Nissan Genuine Diff Oil Hypoid Super (API GL-5, 80W-90) — same oil as the rear diff (per the T32 manual)', capacity: '0.31 L' }
+const XT_COOLANT: FluidSpec = { name: 'Coolant', spec: 'Nissan Long Life Coolant (blue)', capacity: '8.6 L incl. 0.85 L reservoir (petrol models, per the T32 manual)' }
+const XT_SOURCE = 'Nissan Japan official X-Trail lubricants page + FAQ #12548 + T32 owner’s-manual fluids table (oil capacity corrected 2026-07-10: 3.6/3.8 L, not the old ≈4.3 L figure) + MOTUL Japan selector'
 
 const XTRAIL_T32: MaintenanceSpec = {
   chassis: 'T32', label: 'Nissan X-Trail 2.0 petrol 2WD (T32, 2013–2022)', engine: 'MR20DD 2.0L',
-  fluids: [XT_OIL, XT_CVT_PETROL, XT_COOLANT], source: XT_SOURCE,
+  fluids: [XT_OIL, XT_CVT_PETROL, XT_COOLANT], intervals: [N_OIL, N_CVT, ...N_BASE], source: XT_SOURCE,
 }
 const XTRAIL_NT32: MaintenanceSpec = {
   chassis: 'NT32', label: 'Nissan X-Trail 2.0 petrol 4WD (NT32, 2013–2022)', engine: 'MR20DD 2.0L',
-  fluids: [XT_OIL, XT_CVT_PETROL, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], source: XT_SOURCE,
+  fluids: [XT_OIL, XT_CVT_PETROL, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], intervals: [N_OIL, N_CVT, ...N_BASE, FOUR_WD], source: XT_SOURCE,
 }
 const XTRAIL_HT32: MaintenanceSpec = {
   chassis: 'HT32', label: 'Nissan X-Trail Hybrid 2WD (HT32, 2015–2022)', engine: 'MR20DD 2.0L hybrid',
-  fluids: [XT_OIL, XT_CVT_HYBRID, XT_COOLANT], source: XT_SOURCE,
+  fluids: [XT_OIL, XT_CVT_HYBRID, XT_COOLANT], intervals: [N_OIL, N_CVT, ...N_BASE], source: XT_SOURCE,
 }
 const XTRAIL_HNT32: MaintenanceSpec = {
   chassis: 'HNT32', label: 'Nissan X-Trail Hybrid 4WD (HNT32, 2015–2022)', engine: 'MR20DD 2.0L hybrid',
-  fluids: [XT_OIL, XT_CVT_HYBRID, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], source: XT_SOURCE,
+  fluids: [XT_OIL, XT_CVT_HYBRID, XT_REAR_DIFF, XT_TRANSFER, XT_COOLANT], intervals: [N_OIL, N_CVT, ...N_BASE, FOUR_WD], source: XT_SOURCE,
 }
 
 // Toyota Yaris Cross (JDM, 2020+) — petrol (Direct-Shift CVT, CVT Fluid FE) vs
@@ -102,23 +154,23 @@ const YC_ECVT_HYBRID: FluidSpec = { name: 'Transmission (hybrid e-CVT)', spec: '
 const YC_REAR_DIFF: FluidSpec = { name: 'Rear differential (4WD petrol)', spec: 'Gear oil, API GL-5 75W-90', capacity: '0.9 L' }
 const YC_REAR_MOTOR: FluidSpec = { name: 'Rear motor unit (4WD hybrid / E-Four)', spec: 'Toyota ATF WS', capacity: '1.2 L' }
 const YC_COOLANT: FluidSpec = { name: 'Coolant', spec: 'Toyota Super Long Life Coolant (hybrid adds an inverter circuit)' }
-const YC_SOURCE = 'Toyota Japan owner’s manual (Yaris Cross) + MOTUL Japan + Toyota-Club.Net + alphas-jp fitment'
+const YC_SOURCE = 'Toyota Japan owner’s manual (Yaris Cross) + MOTUL Japan + Toyota-Club.Net + alphas-jp fitment; schedule from Toyota official FAQ #197/#199'
 
 const YARISCROSS_MXPB10: MaintenanceSpec = {
   chassis: 'MXPB10', label: 'Toyota Yaris Cross 1.5 petrol 2WD (MXPB10, 2020+)', engine: 'M15A-FKS 1.5L petrol',
-  fluids: [YC_OIL, YC_CVT_PETROL, YC_COOLANT], source: YC_SOURCE,
+  fluids: [YC_OIL, YC_CVT_PETROL, YC_COOLANT], intervals: [T_OIL, T_CVT_FE, ...T_BASE], source: YC_SOURCE,
 }
 const YARISCROSS_MXPB15: MaintenanceSpec = {
   chassis: 'MXPB15', label: 'Toyota Yaris Cross 1.5 petrol 4WD (MXPB15, 2020+)', engine: 'M15A-FKS 1.5L petrol',
-  fluids: [YC_OIL, YC_CVT_PETROL, YC_REAR_DIFF, YC_COOLANT], source: YC_SOURCE,
+  fluids: [YC_OIL, YC_CVT_PETROL, YC_REAR_DIFF, YC_COOLANT], intervals: [T_OIL, T_CVT_FE, ...T_BASE, FOUR_WD], source: YC_SOURCE,
 }
 const YARISCROSS_MXPJ10: MaintenanceSpec = {
   chassis: 'MXPJ10', label: 'Toyota Yaris Cross Hybrid 2WD (MXPJ10, 2020+)', engine: 'M15A-FXE 1.5L hybrid',
-  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_COOLANT], source: YC_SOURCE,
+  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_COOLANT], intervals: [T_OIL, T_ECVT, ...T_BASE], source: YC_SOURCE,
 }
 const YARISCROSS_MXPJ15: MaintenanceSpec = {
   chassis: 'MXPJ15', label: 'Toyota Yaris Cross Hybrid 4WD E-Four (MXPJ15, 2020+)', engine: 'M15A-FXE 1.5L hybrid',
-  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_REAR_MOTOR, YC_COOLANT], source: YC_SOURCE,
+  fluids: [YC_OIL, YC_ECVT_HYBRID, YC_REAR_MOTOR, YC_COOLANT], intervals: [T_OIL, T_ECVT, ...T_BASE, FOUR_WD], source: YC_SOURCE,
 }
 
 // Keys MUST be uppercase chassis codes (matched against the frame-number prefix).
@@ -135,8 +187,9 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Transfer case (4WD)', spec: 'Gear Oil, API GL-5 75W-90', capacity: '0.9 L' },
       { name: 'Brake fluid', spec: 'Toyota Brake Fluid 2500H (DOT3)' },
     ],
+    intervals: [T_OIL, T_CVT_TC, ...T_BASE, FOUR_WD],
     notes: ['NZE144 is the 4WD 1.5L — it has a rear diff and transfer case the 2WD NZE141 does not.'],
-    source: "Toyota owner's manual corollaaxio_201104.pdf p.282–289 (manufacturer-verified)",
+    source: "Toyota owner's manual corollaaxio_201104.pdf p.282–289 (manufacturer-verified); schedule from Toyota official FAQ #197/#199",
   },
 
   TB17: {
@@ -149,7 +202,7 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Coolant', spec: 'Nissan Super Long Life Coolant', capacity: '6.6 L (incl. reservoir)' },
       { name: 'Brake fluid', spec: 'Nissan Brake Fluid No.2500 (DOT3)' },
     ],
-    intervals: ['Engine oil: 15,000 km / 12 months (severe: 7,500 km / 6 months)'],
+    intervals: [N_OIL, N_CVT, ...N_BASE],
     source: 'Nissan official maintenance FAQ #24868 / #24869 (manufacturer-verified)',
   },
 
@@ -161,8 +214,9 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Engine oil', spec: '0W-16 (facelift) / 0W-20 (early); 5W-30 also acceptable', capacity: '3.4 L drain / 3.7 L with filter' },
       { name: 'Transmission (electric CVT — uses ATF)', spec: 'Toyota ATF WS (AISIN AFW+ equivalent)', capacity: '≈3.5 L drain-and-fill (sealed unit)' },
     ],
+    intervals: [T_OIL, T_ECVT, ...T_BASE],
     notes: ['This is the NHP10 (1st-gen). The 2nd-gen Aqua (MXPK10) takes 0W-8 — do NOT apply that grade here.'],
-    source: 'Toyota official maintenance data + corroborating professional-shop records',
+    source: 'Toyota official maintenance data + corroborating professional-shop records; schedule from Toyota official FAQ #197/#199',
   },
 
   E12: {
@@ -170,11 +224,12 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
     label: 'Nissan Note (E12, 2012–2020, 1.2 petrol 2WD)',
     engine: 'HR12DE 1.2L',
     fluids: [
-      { name: 'Engine oil', spec: '0W-20 (API SN / ILSAC). Oil filter AY100-NS004', capacity: '3.3 L drain / 3.5 L with filter' },
+      { name: 'Engine oil', spec: '0W-20 (API SN / ILSAC). Oil filter AY100-NS004', capacity: '2.8 L drain / 3.0 L with filter' },
       { name: 'Transmission (Xtronic CVT)', spec: 'Nissan CVT Fluid NS-3', warning: 'Use NS-3 ONLY — other fluid may damage the CVT (per Nissan).', capacity: '≈6.9 L total (drain-and-fill takes less)' },
     ],
-    notes: ['This record is the 1.2 petrol 2WD (E12). The 1.6L NISMO S takes 5W-30 (4.1 L drain / 4.3 L w/ filter); the e-POWER (HE12) and 4WD (NE12) are different — verify separately.'],
-    source: 'Nissan official FAQ + parts catalog (manufacturer-verified)',
+    intervals: [N_OIL, N_CVT, ...N_BASE],
+    notes: ['This record is the 1.2 petrol 2WD (E12). The 1.6L NISMO S takes 5W-30 (4.1 L drain / 4.3 L w/ filter); the e-POWER (HE12, 3.2/3.4 L) and 4WD (NE12) are different — verify separately.'],
+    source: 'Nissan official FAQ #13788, Note E12/HE12 service data (oil quantity corrected 2026-07-10: 2.8/3.0 L — the old 3.3/3.5 was the e-POWER’s figure)',
   },
 
   NZE161G: {
@@ -185,8 +240,9 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Engine oil', spec: '0W-20 (API SP)', capacity: '≈3.4–3.7 L', confidence: 'unverified' },
       { name: 'Transmission (CVT, Super CVT-i)', spec: 'Toyota Genuine CVT Fluid TC', capacity: '≈3.5–4 L per drain (sealed unit)', confidence: 'unverified' },
     ],
+    intervals: [T_OIL, T_CVT_TC, ...T_BASE],
     notes: ['Oil grade confirmed; capacities not yet manual-verified. The hybrid Fielder (NKE165G) uses ATF WS instead of CVT Fluid TC.'],
-    source: 'MOTUL fitment selector + AISIN ATF/CVTF chart (grade verified; capacities pending manual)',
+    source: 'MOTUL fitment selector + AISIN ATF/CVTF chart (grade verified; capacities pending manual); schedule from Toyota official FAQ #197/#199',
   },
 
   // Honda Vezel — the critical variant trap: petrol = CVT (HCF-2), hybrid =
@@ -199,8 +255,9 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Engine oil', spec: '0W-20 (Honda Genuine)', capacity: '≈3.4 L with filter', confidence: 'unverified' },
       { name: 'Transmission (CVT)', spec: 'Honda CVT Fluid HCF-2', warning: 'Use HCF-2 ONLY — this 2nd-gen CVT requires HCF-2; the wrong fluid can damage it.', capacity: '≈3.9 L' },
     ],
+    intervals: [H_OIL, 'CVT fluid (Honda HCF-2): ≈40,000 km per Honda dealer guidance — no nationally published figure (guidance)', ...H_BASE],
     notes: ['Petrol Vezel = CVT (HCF-2). This is NOT the hybrid, which is a dual-clutch on ATF DW-1 — do not mix them up. The 4WD petrol (RU2) adds a rear differential (fluid not yet verified).'],
-    source: 'Honda Japan service data + Ravenol / Honda Parts fitment (engine-oil capacity approximate)',
+    source: 'Honda Japan service data + Ravenol / Honda Parts fitment (engine-oil capacity approximate); schedule from Honda Vezel FAQ qa018 + honda.co.jp auto-parts pages',
   },
 
   RU3: {
@@ -211,8 +268,9 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Engine oil', spec: '0W-20 (0W-16 also acceptable on later / Ultra NEXT spec)', capacity: '3.1 L drain / 3.3 L with filter' },
       { name: 'Transmission (7-speed DUAL-CLUTCH, i-DCD)', spec: 'Honda ATF DW-1', warning: 'This is a DUAL-CLUTCH, not a CVT — it takes ATF DW-1 and holds only ~1.3 L. Do NOT use CVT fluid, and do NOT fill it like a normal automatic (overfill risk).', capacity: '≈1.3 L' },
     ],
+    intervals: [H_OIL, 'i-DCD gearbox oil (ATF DW-1): no published change interval — specialist job either way, ~1.3 L dual-clutch (not published)', ...H_BASE],
     notes: ['Hybrid Vezel = 7-speed dual-clutch (i-DCD), NOT a CVT. Its clutch actuator uses brake fluid (DOT 3/4), serviced separately from the gear oil. The 4WD hybrid (RU4) adds a rear differential (fluid not yet verified).'],
-    source: 'Honda Japan official FAQ qa018 (engine oil) + MOTUL / Ravenol fitment (ATF DW-1, ~1.3 L)',
+    source: 'Honda Japan official FAQ qa018 (engine oil) + MOTUL / Ravenol fitment (ATF DW-1, ~1.3 L); schedule from Honda Vezel FAQ qa018 + honda.co.jp auto-parts pages',
   },
 
   // Toyota Urban Cruiser Hyryder — India-built (not JDM), matched by name. Two
@@ -230,6 +288,10 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Transmission — strong hybrid e-CVT', spec: 'Toyota ATF WS (sealed unit)', warning: 'ATF WS — for the hybrid e-CVT only. NOT the 6-speed auto’s ATF AW-1; do not interchange.', capacity: '2.6 L' },
       { name: 'Coolant — mild hybrid', spec: 'Toyota Super Long Life Coolant (SLLC)', capacity: '4.2 L' },
       { name: 'Coolant — strong hybrid', spec: 'Toyota Super Long Life Coolant (SLLC)', capacity: 'engine 4.8 L + inverter 1.9 L' },
+    ],
+    intervals: [
+      'Service with engine oil: every 10,000 km or 6 months — Toyota India service schedule (guidance; Indian manual not public)',
+      'Other items (filters, plugs, fluids): handled at those scheduled services per the India schedule — no independently verified figures yet (guidance)',
     ],
     notes: [
       'TWO powertrains — ASK the customer whether theirs is the mild-hybrid petrol (K15C) or the strong/full hybrid (M15 TNGA) BEFORE quoting a gearbox fluid. The mild hybrid is the normal petrol (manual or 6-speed auto); the strong hybrid is the self-charging full hybrid with the e-CVT.',
@@ -254,11 +316,18 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Transmission — 8-speed AUTO (Gen 4 2.5)', spec: 'Hyundai ATF SP-IV (SP-IV-RR / SP-4M)' },
       { name: 'Transmission — 7-speed DUAL-CLUTCH (Gen 3 1.6 Turbo)', spec: 'Hyundai DCT fluid SAE 70E (GL-4)', warning: 'Dual-clutch — uses DCT gear oil (70E), NOT ATF SP-IV. Do not put automatic-transmission fluid in the DCT.', capacity: '≈2 L' },
     ],
+    intervals: [
+      'Engine oil: severe/T&T 8,000 km or 6 months; normal 12,000 km or 12 months (Hyundai official, US manual, km-converted)',
+      'Cabin filter: 24,000 km · engine air filter: 48,000 km · brake fluid: 48,000 km (Hyundai official, US manual)',
+      'Spark plugs: ≈95,000 km · transmission fluid: inspect at ≈95,000 km (Hyundai official, US manual)',
+      'Coolant: first ≈190,000 km, then every ≈95,000 km (Hyundai official, US manual)',
+      'Schedule is the US-market manual converted from miles — Korean-market imports may differ slightly; say so when quoting (guidance)',
+    ],
     notes: [
       'TWO generations with different specs — ASK the customer the year and engine BEFORE quoting. Key splits: engine oil is 5W-30 on the older (2015–2020) but 0W-20 on the newer (2021+); and the Gen-3 1.6 Turbo has a dual-clutch (DCT oil 70E), while everything else is a normal automatic (ATF SP-IV).',
       'Korean (not JDM) — matched by model name, no Japanese chassis code.',
     ],
-    source: 'HyundaiNews 2022 spec sheet + Hyundai dealer service data + Ravenol fitment',
+    source: 'HyundaiNews 2022 spec sheet + Hyundai dealer service data + Ravenol fitment; schedule from ownersmanual.hyundai.com (US market)',
   },
 
   // Toyota C-HR (JDM) — petrol NGX10/NGX50, hybrid ZYX10/ZYX11.
@@ -293,11 +362,17 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
       { name: 'Transmission — 1.6 petrol (Xtronic CVT)', spec: 'Nissan CVT Fluid NS-3', warning: 'NS-3 only — for the petrol CVT. NOT the e-POWER (which uses Matic Fluid S).' },
       { name: 'Coolant', spec: 'Nissan Long Life Coolant (blue)' },
     ],
+    intervals: [
+      N_OIL,
+      'e-POWER reduction gear (Matic Fluid S): no published change interval (not published)',
+      N_CVT,
+      ...N_BASE,
+    ],
     notes: [
       'TWO versions — ASK whether it is the e-POWER (electric drive; engine only charges) or the 1.6 petrol BEFORE quoting a gearbox fluid. The JDM import is almost always the e-POWER, which has NO CVT (reduction gear on Matic Fluid S); the petrol has a CVT (NS-3).',
       'Matched by model name (no single JDM chassis code).',
     ],
-    source: 'Nissan Japan + MOTUL Japan (e-POWER SNP15: Matic Fluid S, 1.94 L) + AMSOIL (1.6 petrol)',
+    source: 'Nissan Japan + MOTUL Japan (e-POWER SNP15: Matic Fluid S, 1.94 L) + AMSOIL (1.6 petrol); oil schedule confirmed per-model by Nissan FAQ #3111',
   },
 }
 
@@ -308,7 +383,8 @@ export const MAINTENANCE_SPECS: Record<string, MaintenanceSpec> = {
  *  2. Non-JDM cars with no Japanese chassis code (e.g. Hyryder, Tucson): match the
  *     model name against each record's `matchNames`.
  * Returns null if not in the list (Earl then falls back to clearly-labelled general
- * guidance, never a fake spec).
+ * guidance, never a fake spec). Callers with a separate model_code field should
+ * retry with it when the frame number misses — see chat-earl.
  *
  * ponytail: exact frame-prefix match + simple name-substring fallback. Variant
  * sub-codes (e.g. 4WD NE12 vs 2WD E12) intentionally do NOT share a record — add the
@@ -342,7 +418,10 @@ export function formatMaintenanceSpec(s: MaintenanceSpec): string {
     const warn = f.warning ? `  ⚠ ${f.warning}` : ''
     lines.push(`    - ${f.name}: ${f.spec}${cap}${unverified}${warn}`)
   }
-  if (s.intervals?.length) lines.push(`    Service intervals: ${s.intervals.join('; ')}`)
+  if (s.intervals?.length) {
+    lines.push('    Service schedule (severe = the practical T&T figure):')
+    for (const i of s.intervals) lines.push(`      - ${i}`)
+  }
   for (const n of s.notes ?? []) lines.push(`    Note: ${n}`)
   lines.push(`    Source: ${s.source}`)
   return lines.join('\n')

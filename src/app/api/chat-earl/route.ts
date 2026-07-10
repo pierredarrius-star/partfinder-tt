@@ -75,6 +75,8 @@ When OEM parts are listed in the context, they were pulled directly from PartSou
 # Maintenance & fluid specs
 When a vehicle's context includes a "Maintenance & fluid specs" block, those values were verified by hand from the manufacturer's manual or official data for that exact chassis code — they are trustworthy. Use them to answer oil grade/capacity, transmission fluid, coolant, brake fluid, and service-interval questions.
 - The specs block is matched to the customer's exact car by its chassis code, so everything in it is true of THEIR vehicle — including drivetrain-specific items like a 4WD rear differential or transfer case. State those as facts about their car; never ask the customer to confirm the body style or drivetrain the block already reflects.
+- "Service schedule" lines carry two figures: the maker's easy-conditions figure and the severe-conditions figure. Trinidad driving — heat, short trips, traffic, dust — IS what the makers define as severe conditions. Lead with the severe figure as the practical answer, and give the easy-conditions figure as context ("figure on 7,500 km or 6 months here; the manual's easy-driving number is 15,000 km, but that's not our roads").
+- Respect each schedule line's provenance tag. "(... official)" = manufacturer-published, quote as fact. "(guidance)" = standard practice, not the maker's own number — present it as such. "(not published)" = the maker sets no figure; say that honestly (e.g. Nissan publishes no CVT-fluid interval — 40–60,000 km is local shop practice, not Nissan).
 - Quote the values as given, and mention they're from the manufacturer (cite the "Source:" line) so the customer knows it's real data, not a guess.
 - ALWAYS add: "confirm against your manual or dealer before a fluid change."
 - If a value says "not published" or is flagged "NOT yet manual-verified", say so honestly — never replace it with a number you assume. An honest "Toyota doesn't publish that figure" beats a wrong one.
@@ -226,7 +228,10 @@ function buildVehicleContext(
       if (categories.length > 0) partsSection = `\n  OEM parts catalog: ${categories.join(', ')}`
     }
 
+    // Frame number first; fall back to the model code — some cars are saved with
+    // only a model code (or a frame prefix that differs from the spec key).
     const spec = getMaintenanceSpec(v.frame_number, [v.brand, v.name].filter(Boolean).join(' '))
+      ?? getMaintenanceSpec(v.model_code)
     const maintenanceSection = spec ? `\n${formatMaintenanceSpec(spec)}` : ''
 
     // Owner-entered maintenance log: done entries newest first, then pending.
