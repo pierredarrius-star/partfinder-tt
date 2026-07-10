@@ -8,10 +8,12 @@ import EditSheet from '@/components/EditSheet'
 import OdometerScanButton from '@/components/OdometerScanButton'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
 import { mileageIsStale } from '@/lib/service-tracker'
+import { enablePushReminders, needsInstallFirst } from '@/lib/push'
 
 type UserProfile = {
   full_name: string | null
   whatsapp_number: string | null
+  reminders_enabled: boolean
 }
 
 type Vehicle = {
@@ -102,6 +104,7 @@ export default function Garage() {
   const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [reminderBusy, setReminderBusy] = useState(false)
   const [accessToken, setAccessToken] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -135,7 +138,7 @@ export default function Garage() {
       const [profileRes, vehiclesRes] = await Promise.all([
         supabase
           .from('user_profiles')
-          .select('full_name, whatsapp_number')
+          .select('full_name, whatsapp_number, reminders_enabled')
           .eq('user_id', session.user.id)
           .single(),
         supabase
@@ -194,6 +197,35 @@ export default function Garage() {
     window.location.href = '/login'
   }
 
+  // Reminders on/off (avatar menu). Push is the only channel (no WhatsApp
+  // fallback — user decision), so ON only sticks when notifications actually
+  // work on this device; otherwise we say why and leave it off. The in-app
+  // DUE / OVERDUE pills keep tracking either way.
+  const handleToggleReminders = async () => {
+    if (!profile || !userId || reminderBusy) return
+    setReminderBusy(true)
+    if (profile.reminders_enabled) {
+      await supabase.from('user_profiles').update({ reminders_enabled: false }).eq('user_id', userId)
+      setProfile({ ...profile, reminders_enabled: false })
+    } else {
+      const result = await enablePushReminders(supabase) // sets the flag itself on success
+      if (result === 'enabled') {
+        setProfile({ ...profile, reminders_enabled: true })
+      } else {
+        alert(
+          needsInstallFirst()
+            ? 'iPhones only allow notifications for installed apps — in Safari tap Share → Add to Home Screen, then turn reminders on from the installed app.'
+            : result === 'denied'
+              ? 'Notifications are blocked for this site in your browser settings. The DUE / OVERDUE pills still keep track for you.'
+              : result === 'unsupported'
+                ? "This browser can't do notifications. The DUE / OVERDUE pills still keep track for you."
+                : "Couldn't turn notifications on — try again."
+        )
+      }
+    }
+    setReminderBusy(false)
+  }
+
   const handleRemove = async (v: Vehicle) => {
     if (!confirm(`Remove this ${v.year} ${titleCase(v.brand)} ${titleCase(v.name)}? This cannot be undone.`)) return
 
@@ -240,7 +272,7 @@ export default function Garage() {
         alert(error.message)
         return
       }
-      setProfile(p => ({ full_name: p?.full_name ?? null, whatsapp_number: p?.whatsapp_number ?? null, ...patch }))
+      setProfile(p => ({ full_name: p?.full_name ?? null, whatsapp_number: p?.whatsapp_number ?? null, reminders_enabled: p?.reminders_enabled ?? false, ...patch }))
       setEditTarget(null)
       return
     }
@@ -392,6 +424,16 @@ export default function Garage() {
                 className="w-full text-left px-4 py-3 text-sm font-medium text-cream hover:bg-elevated transition-colors"
               >
                 Edit WhatsApp number
+              </button>
+              <button
+                onClick={handleToggleReminders}
+                disabled={reminderBusy}
+                className="w-full text-left px-4 py-3 text-sm font-medium text-cream hover:bg-elevated transition-colors flex items-center justify-between disabled:opacity-60"
+              >
+                Service reminders
+                <span className={`font-mono text-[10px] tracking-widest uppercase px-1.5 py-0.5 rounded ${profile?.reminders_enabled ? 'bg-live/10 text-live' : 'bg-elevated text-subtle'}`}>
+                  {reminderBusy ? '…' : profile?.reminders_enabled ? 'ON' : 'OFF'}
+                </span>
               </button>
               <button
                 onClick={handleSignOut}
