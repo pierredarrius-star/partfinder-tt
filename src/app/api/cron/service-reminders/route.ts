@@ -33,8 +33,9 @@ function fmtDue(iso: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  // Fail closed: no configured secret = nobody runs this, not everybody.
   const secret = req.headers.get('authorization')?.replace('Bearer ', '')
-  if (secret !== process.env.CRON_SECRET) {
+  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   if (!configureWebPush()) {
