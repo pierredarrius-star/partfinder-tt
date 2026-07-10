@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { createBrowserSupabaseClient } from '@/lib/supabase'
 import EditSheet from '@/components/EditSheet'
 import OdometerScanButton from '@/components/OdometerScanButton'
+import ReminderOptIn from '@/components/ReminderOptIn'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
 import { TRACKED_SERVICES, predictService, mileageIsStale } from '@/lib/service-tracker'
 
@@ -32,6 +33,7 @@ export default function MaintenancePage() {
   const [vehicle, setVehicle] = useState<Vehicle | null>(null)
   const [tasks, setTasks] = useState<MaintenanceTask[]>([])
   const [userId, setUserId] = useState<string | null>(null)
+  const [remindersEnabled, setRemindersEnabled] = useState(true) // assume on until loaded — avoids a flash of the opt-in
   const [loading, setLoading] = useState(true)
 
   // log-a-task sheet
@@ -75,11 +77,12 @@ export default function MaintenancePage() {
       }
       setVehicle(v)
 
-      const { data: rows } = await supabase
-        .from('maintenance_tasks')
-        .select('*')
-        .eq('vehicle_id', v.id)
+      const [{ data: rows }, { data: prof }] = await Promise.all([
+        supabase.from('maintenance_tasks').select('*').eq('vehicle_id', v.id),
+        supabase.from('user_profiles').select('reminders_enabled').eq('user_id', session.user.id).maybeSingle(),
+      ])
       setTasks(rows ?? [])
+      setRemindersEnabled(prof?.reminders_enabled ?? false)
       setLoading(false)
     }
     load()
@@ -244,6 +247,9 @@ export default function MaintenancePage() {
             </span>
           </button>
         )}
+
+        {/* reminder opt-in — contextual, dismissible forever */}
+        <ReminderOptIn remindersEnabled={remindersEnabled} />
 
         {/* SERVICE TRACKER — predictions from the owner's own records */}
         <section className="pt-5">

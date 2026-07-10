@@ -30,6 +30,10 @@ export const metadata: Metadata = {
   title: "PartFinder - T&T Auto Parts Local Search",
   description: "Find auto parts from suppliers across Trinidad and Tobago in seconds.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
