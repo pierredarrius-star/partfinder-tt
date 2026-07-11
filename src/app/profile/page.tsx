@@ -141,9 +141,10 @@ export default function Garage() {
           .select('full_name, whatsapp_number, reminders_enabled')
           .eq('user_id', session.user.id)
           .single(),
+        // tasks ride along with the vehicles — one network wait instead of two
         supabase
           .from('user_vehicles')
-          .select('*')
+          .select('*, maintenance_tasks(*)')
           .eq('user_id', session.user.id)
           .order('is_primary', { ascending: false })
           .order('created_at', { ascending: true }),
@@ -155,16 +156,9 @@ export default function Garage() {
       }
 
       setProfile(profileRes.data)
-      const list = vehiclesRes.data ?? []
-      setVehicles(list)
-
-      if (list[0]) {
-        const { data: taskRows } = await supabase
-          .from('maintenance_tasks')
-          .select('*')
-          .eq('vehicle_id', list[0].id)
-        setTasks(taskRows ?? [])
-      }
+      const list = (vehiclesRes.data ?? []) as (Vehicle & { maintenance_tasks: MaintenanceTask[] })[]
+      setVehicles(list.map(({ maintenance_tasks: _tasks, ...v }) => v))
+      setTasks(list[0]?.maintenance_tasks ?? [])
 
       setLoading(false)
     }

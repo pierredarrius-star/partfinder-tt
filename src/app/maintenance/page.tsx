@@ -64,26 +64,27 @@ export default function MaintenancePage() {
       }
       setUserId(session.user.id)
 
-      const { data: v } = await supabase
-        .from('user_vehicles')
-        .select('id, brand, name, model_code, frame_number, mileage_km, mileage_updated_at')
-        .eq('user_id', session.user.id)
-        .order('is_primary', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // everything in one round trip — tasks ride along with the vehicle
+      const [vehicleRes, profileRes] = await Promise.all([
+        supabase
+          .from('user_vehicles')
+          .select('id, brand, name, model_code, frame_number, mileage_km, mileage_updated_at, maintenance_tasks(*)')
+          .eq('user_id', session.user.id)
+          .order('is_primary', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase.from('user_profiles').select('reminders_enabled').eq('user_id', session.user.id).maybeSingle(),
+      ])
 
-      if (!v) {
+      const row = vehicleRes.data as (Vehicle & { maintenance_tasks: MaintenanceTask[] }) | null
+      if (!row) {
         router.push('/profile')
         return
       }
+      const { maintenance_tasks: taskRows, ...v } = row
       setVehicle(v)
-
-      const [{ data: rows }, { data: prof }] = await Promise.all([
-        supabase.from('maintenance_tasks').select('*').eq('vehicle_id', v.id),
-        supabase.from('user_profiles').select('reminders_enabled').eq('user_id', session.user.id).maybeSingle(),
-      ])
-      setTasks(rows ?? [])
-      setRemindersEnabled(prof?.reminders_enabled ?? false)
+      setTasks(taskRows ?? [])
+      setRemindersEnabled(profileRes.data?.reminders_enabled ?? false)
       setLoading(false)
     }
     load()

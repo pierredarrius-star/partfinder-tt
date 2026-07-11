@@ -9,18 +9,21 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next({ request })
   const supabase = createMiddlewareSupabaseClient(request, response)
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // Local session check (cookie read; only refreshes over the network when the
+  // token has expired). No per-navigation auth-server round trip — every data
+  // query is protected by RLS regardless of what this gate lets through.
+  const { data: { session } } = await supabase.auth.getSession()
   const path = request.nextUrl.pathname
   const isPublic = PUBLIC.some(p => path.startsWith(p))
 
-  if (!user && !isPublic) {
+  if (!session && !isPublic) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('next', path)
     return NextResponse.redirect(loginUrl)
   }
 
   // Already signed in — skip the login page.
-  if (user && path.startsWith('/login')) {
+  if (session && path.startsWith('/login')) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
