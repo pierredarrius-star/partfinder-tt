@@ -8,13 +8,14 @@ import EditSheet from '@/components/EditSheet'
 import OdometerScanButton from '@/components/OdometerScanButton'
 import ReminderOptIn from '@/components/ReminderOptIn'
 import { type MaintenanceTask, taskStatus, fmtDate } from '@/lib/maintenance'
-import { TRACKED_SERVICES, predictService, mileageIsStale } from '@/lib/service-tracker'
+import { trackedServicesFor, predictService, mileageIsStale } from '@/lib/service-tracker'
 
 type Vehicle = {
   id: string
   brand: string | null
   name: string | null
   model_code: string | null
+  frame_number: string | null
   mileage_km: number | null
   mileage_updated_at: string | null
 }
@@ -65,7 +66,7 @@ export default function MaintenancePage() {
 
       const { data: v } = await supabase
         .from('user_vehicles')
-        .select('id, brand, name, model_code, mileage_km, mileage_updated_at')
+        .select('id, brand, name, model_code, frame_number, mileage_km, mileage_updated_at')
         .eq('user_id', session.user.id)
         .order('is_primary', { ascending: false })
         .limit(1)
@@ -254,7 +255,7 @@ export default function MaintenancePage() {
         {/* SERVICE TRACKER — predictions from the owner's own records */}
         <section className="pt-5">
           <div className="font-mono text-[10px] tracking-widest uppercase mb-2 text-subtle">SERVICE TRACKER</div>
-          {TRACKED_SERVICES.map(svc => {
+          {(vehicle ? trackedServicesFor(vehicle) : []).map(svc => {
             const p = vehicle ? predictService(svc, tasks, vehicle) : null
             if (!p) return null
             return (
@@ -279,8 +280,11 @@ export default function MaintenancePage() {
                 ) : (
                   <>
                     <p className="text-[12px] mt-1 text-cream">
-                      Next due ≈ <span className="font-mono text-brass">{fmtDate(p.dueDate)}</span>
-                      {p.dueKm != null && <span className="font-mono text-muted"> · {p.dueKm.toLocaleString()} km</span>}
+                      Next due ≈{' '}
+                      {p.dueDate && <span className="font-mono text-brass">{fmtDate(p.dueDate)}</span>}
+                      {p.dueKm != null && (
+                        <span className="font-mono text-muted">{p.dueDate ? ' · ' : ''}{p.dueKm.toLocaleString()} km</span>
+                      )}
                     </p>
                     <p className="text-[10px] mt-0.5 text-subtle">
                       Last done {fmtDate(p.lastDoneDate, true)}
@@ -288,7 +292,8 @@ export default function MaintenancePage() {
                       {p.kmPerDay != null
                         ? ` · you drive ~${Math.round(p.kmPerDay)} km/day`
                         : p.basis === 'date-only' ? ' · date-based — add odometer readings to sharpen this' : ''}
-                      {` · every ${svc.intervalKm.toLocaleString()} km or ${svc.intervalMonths} months`}
+                      {` · every ${svc.intervalKm.toLocaleString()} km${svc.intervalMonths != null ? ` or ${svc.intervalMonths} months` : ''}`}
+                      {svc.verified && ' — maker’s severe-use figure'}
                     </p>
                   </>
                 )}

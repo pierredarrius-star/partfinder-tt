@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase-server'
-import { TRACKED_SERVICES, predictService } from '@/lib/service-tracker'
+import { trackedServicesFor, predictService } from '@/lib/service-tracker'
 import type { MaintenanceTask } from '@/lib/maintenance'
 import { configureWebPush, sendPushToUser } from '@/lib/push-server'
 
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 
   const { data: vehicles } = await supabase
     .from('user_vehicles')
-    .select('id, user_id, nickname, year, brand, name, mileage_km, mileage_updated_at')
+    .select('id, user_id, nickname, year, brand, name, frame_number, model_code, mileage_km, mileage_updated_at')
     .in('user_id', profiles.map(p => p.user_id))
   if (!vehicles?.length) return NextResponse.json({ users: profiles.length, sent: 0 })
 
@@ -67,13 +67,15 @@ export async function GET(req: NextRequest) {
   for (const v of vehicles) {
     const vTasks = (tasks ?? []).filter(t => t.vehicle_id === v.id) as MaintenanceTask[]
     const carName = titleCase(v.nickname || [v.year, v.brand, v.name].filter(Boolean).join(' '))
-    for (const service of TRACKED_SERVICES) {
+    for (const service of trackedServicesFor(v)) {
       const p = predictService(service, vTasks, v)
-      if (!p.dueDate || !p.lastDoneDate) continue
-      const daysLeft = Math.round(
-        (new Date(`${p.dueDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / DAY_MS
-      )
-      if (p.status === 'overdue' || (p.status === 'soon' && daysLeft <= REMIND_DAYS)) {
+      if (!p.lastDoneDate) continue
+      // dueDate can be null for km-only rules (e.g. Toyota CVT 100,000 km) —
+      // those can still go overdue via the odometer.
+      const daysLeft = p.dueDate
+        ? Math.round((new Date(`${p.dueDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / DAY_MS)
+        : null
+      if (p.status === 'overdue' || (p.status === 'soon' && daysLeft !== null && daysLeft <= REMIND_DAYS)) {
         due.push({
           user_id: v.user_id,
           vehicle_id: v.id,
@@ -81,7 +83,7 @@ export async function GET(req: NextRequest) {
           last_service_date: p.lastDoneDate,
           line: p.status === 'overdue'
             ? `${service.label} is overdue on your ${carName}`
-            : `${service.label} due around ${fmtDue(p.dueDate)} on your ${carName}`,
+            : `${service.label} due around ${fmtDue(p.dueDate!)} on your ${carName}`,
         })
       }
     }

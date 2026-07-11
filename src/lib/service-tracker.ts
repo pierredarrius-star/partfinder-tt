@@ -1,21 +1,28 @@
 // Service-interval tracker: predicts when recurring services are due from the
 // owner's own records. Plain arithmetic — km driven / days elapsed = daily rate;
 // due = whichever comes first of the km target and the calendar target.
+//
+// Intervals: covered cars (see service-intervals.ts) use their manufacturer's
+// verified SEVERE-conditions figures via trackedServicesFor(); everything else
+// keeps the T&T mechanic defaults below.
 
 import type { MaintenanceTask } from './maintenance'
+import { serviceIntervalsFor } from './service-intervals'
 
 export type ServiceDef = {
   key: 'engine_oil' | 'transmission_oil'
   label: string
   intervalKm: number
-  intervalMonths: number
+  intervalMonths?: number // absent = km-only rule (e.g. Toyota CVT severe 100,000 km)
+  verified?: boolean      // true = manufacturer's severe figure, not the local default
   matches: (task: string) => boolean
 }
 
 const TRANS_WORDS = /transmission|gearbox|cvt|atf/i
 
 // ponytail: two hardcoded services; make this a table when a third+ shows up.
-// Mechanic defaults for T&T heat — per-car spec table can override later.
+// Mechanic defaults for T&T heat — verified per-car figures override via
+// trackedServicesFor().
 export const TRACKED_SERVICES: ServiceDef[] = [
   {
     key: 'engine_oil',
@@ -32,6 +39,32 @@ export const TRACKED_SERVICES: ServiceDef[] = [
     matches: t => TRANS_WORDS.test(t) && /oil|fluid|change|service/i.test(t),
   },
 ]
+
+type VehicleIdentity = {
+  frame_number?: string | null
+  model_code?: string | null
+  brand?: string | null
+  name?: string | null
+}
+
+// The services to track for THIS car: manufacturer-verified severe intervals
+// where we have them, the generic defaults where we don't, and no card at all
+// for sealed gearboxes the maker schedules no change for (hybrids).
+export function trackedServicesFor(vehicle: VehicleIdentity): ServiceDef[] {
+  const overrides = serviceIntervalsFor(
+    vehicle.frame_number,
+    vehicle.model_code,
+    [vehicle.brand, vehicle.name].filter(Boolean).join(' ')
+  )
+  if (!overrides) return TRACKED_SERVICES
+
+  return TRACKED_SERVICES.flatMap(s => {
+    const o = overrides[s.key]
+    if (o === null) return []   // sealed — no schedule to track
+    if (!o) return [s]          // nothing verified — keep the local default
+    return [{ ...s, intervalKm: o.km, intervalMonths: o.months, verified: true }]
+  })
+}
 
 export type Prediction = {
   service: ServiceDef
@@ -86,7 +119,7 @@ export function predictService(
 
   const lastOdo = (last as MaintenanceTask & { odometer_km?: number | null }).odometer_km ?? null
   const dueKm = lastOdo != null ? lastOdo + service.intervalKm : null
-  const calendarDue = addMonths(last.done_at!, service.intervalMonths)
+  const calendarDue = service.intervalMonths != null ? addMonths(last.done_at!, service.intervalMonths) : null
   const today = new Date().toISOString().slice(0, 10)
 
   // km-based estimate needs: odometer at service + a later mileage reading
@@ -105,14 +138,17 @@ export function predictService(
     kmDueDate = remainingKm <= 0 ? today : addDays(mileageDate, Math.round(remainingKm / kmPerDay))
   }
 
-  const dueDate = kmDueDate && kmDueDate < calendarDue ? kmDueDate : calendarDue
-  const basis: Prediction['basis'] = kmDueDate ? 'km+date' : 'date-only'
+  const dueDate = kmDueDate && calendarDue
+    ? (kmDueDate < calendarDue ? kmDueDate : calendarDue)
+    : (kmDueDate ?? calendarDue)
+  const basis: Prediction['basis'] = kmDueDate ? 'km+date' : calendarDue ? 'date-only' : 'none'
 
   const alreadyPastKm = dueKm != null && vehicle.mileage_km != null && vehicle.mileage_km >= dueKm
   const status: Prediction['status'] =
-    alreadyPastKm || dueDate <= today ? 'overdue'
-    : daysBetween(today, dueDate) <= SOON_DAYS ? 'soon'
-    : 'ok'
+    alreadyPastKm || (dueDate != null && dueDate <= today) ? 'overdue'
+    : dueDate != null && daysBetween(today, dueDate) <= SOON_DAYS ? 'soon'
+    : dueDate != null || dueKm != null ? 'ok'
+    : 'unknown'
 
   return {
     service,
